@@ -28,7 +28,7 @@ const Index = () => {
     { icon: Wallet, ...t.modules.billing, color: 'from-gold to-accent' },
   ];
 
-  const plans = [
+  const plans: Array<{ name: string; price: string; desc: string; features: string[]; highlighted?: boolean; popular?: string }> = [
     { ...t.pricing.free, features: ['1 projet', 'Subdomain nebula.app', 'Community support'] },
     { ...t.pricing.starter, features: ['5 projets', 'Custom domain', 'Email pro', 'Mobile Money'], highlighted: true },
     { ...t.pricing.pro, features: ['Projets illimités', 'CI/CD avancé', 'Monitoring complet', 'Priority support'] },
