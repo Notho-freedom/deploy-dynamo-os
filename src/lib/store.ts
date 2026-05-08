@@ -36,7 +36,7 @@ export interface WalletTx {
   type: 'topup' | 'usage' | 'refund';
   amount: number; // FCFA
   currency: 'XOF' | 'USD';
-  method?: 'mtn' | 'orange' | 'stripe' | 'wave';
+  method?: 'mtn' | 'orange' | 'stripe' | 'wave' | 'moov';
   description: string;
   status: 'succeeded' | 'pending' | 'failed';
   createdAt: number;
