@@ -1,47 +1,57 @@
-import { useT } from '@/lib/i18n';
-import { Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useT, useI18n } from '@/lib/i18n';
+import { Logo } from '@/components/Logo';
 
-export const SiteFooter = () => {
+export function SiteFooter() {
   const t = useT();
+  const { lang } = useI18n();
   return (
-    <footer className="border-t border-border/50 mt-32">
-      <div className="container py-12 grid grid-cols-2 md:grid-cols-4 gap-8">
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-7 w-7 rounded-lg gradient-cosmic flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="font-display font-bold">NebulaOS</span>
+    <footer className="border-t border-border mt-32">
+      <div className="max-w-6xl mx-auto px-6 py-16">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-10">
+          <div className="col-span-2">
+            <Logo size={28} className="text-primary" />
+            <p className="font-editorial italic text-lg mt-6 text-pretty leading-snug max-w-xs">
+              {lang === 'fr'
+                ? 'Concevoir, déployer et facturer depuis un seul endroit. Pensé en Afrique, fait pour le monde.'
+                : 'Design, ship and bill from one place. Built in Africa, made for the world.'}
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">🌍 Made in Africa.</p>
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-4">{t.footer.product}</p>
+            <ul className="space-y-2.5 text-[13px]">
+              <li><a href="#modules" className="hover:text-primary transition">{t.nav.features}</a></li>
+              <li><a href="#pricing" className="hover:text-primary transition">{t.nav.pricing}</a></li>
+              <li><a href="#how" className="hover:text-primary transition">{lang === 'fr' ? 'Comment ça marche' : 'How it works'}</a></li>
+              <li><Link to="/dashboard" className="hover:text-primary transition">Dashboard</Link></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-4">{t.footer.company}</p>
+            <ul className="space-y-2.5 text-[13px]">
+              <li><a className="hover:text-primary transition" href="#">{lang === 'fr' ? 'À propos' : 'About'}</a></li>
+              <li><a className="hover:text-primary transition" href="#">{lang === 'fr' ? 'Manifeste' : 'Manifesto'}</a></li>
+              <li><a className="hover:text-primary transition" href="#">Careers</a></li>
+              <li><a className="hover:text-primary transition" href="#">Contact</a></li>
+            </ul>
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-4">{t.footer.legal}</p>
+            <ul className="space-y-2.5 text-[13px]">
+              <li><a className="hover:text-primary transition" href="#">{lang === 'fr' ? 'Confidentialité' : 'Privacy'}</a></li>
+              <li><a className="hover:text-primary transition" href="#">Terms</a></li>
+              <li><a className="hover:text-primary transition" href="#">Status</a></li>
+            </ul>
+          </div>
         </div>
-        <div>
-          <h4 className="font-display font-semibold mb-3">{t.footer.product}</h4>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li><a href="#modules" className="hover:text-foreground">Modules</a></li>
-            <li><a href="#pricing" className="hover:text-foreground">Pricing</a></li>
-            <li><a href="#" className="hover:text-foreground">Changelog</a></li>
-          </ul>
+        <div className="bogolan-stripe h-1 mt-16 mb-6 opacity-50" />
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-4 text-[12px] text-muted-foreground font-mono">
+          <span>© 2026 NebulaOS</span>
+          <span className="hidden md:inline">·</span>
+          <span>{lang === 'fr' ? 'Abidjan · Lagos · Dakar · Nairobi' : 'Abidjan · Lagos · Dakar · Nairobi'}</span>
+          <span className="ml-auto flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-success" /> All systems normal</span>
         </div>
-        <div>
-          <h4 className="font-display font-semibold mb-3">{t.footer.company}</h4>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li><a href="#" className="hover:text-foreground">About</a></li>
-            <li><a href="#" className="hover:text-foreground">Blog</a></li>
-            <li><a href="#" className="hover:text-foreground">Careers</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="font-display font-semibold mb-3">{t.footer.legal}</h4>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li><a href="#" className="hover:text-foreground">Terms</a></li>
-            <li><a href="#" className="hover:text-foreground">Privacy</a></li>
-          </ul>
-        </div>
-      </div>
-      <div className="border-t border-border/50 py-6 text-center text-sm text-muted-foreground">
-        © 2026 NebulaOS — {t.footer.rights}
       </div>
     </footer>
   );
-};
+}
