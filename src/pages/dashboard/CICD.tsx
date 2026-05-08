@@ -1,134 +1,170 @@
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
+import { useI18n } from '@/lib/i18n';
 import { useApp } from '@/lib/store';
-import { Github, GitBranch, GitCommit, RotateCcw, Check, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { GitHubOAuthDialog } from '@/components/GitHubOAuthDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { StatusDot } from '@/components/StatusDot';
+import { Github, Search, GitBranch, Lock, Check } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { formatDistanceToNow } from 'date-fns';
 
-const fakeRepos = [
-  { name: 'akua/kente-shop', branch: 'main', private: false, lastPush: '2h ago' },
-  { name: 'akua/sahel-blog', branch: 'develop', private: true, lastPush: '1d ago' },
-  { name: 'akua/cfa-pay-api', branch: 'main', private: true, lastPush: '3d ago' },
-  { name: 'akua/portfolio', branch: 'main', private: false, lastPush: '1w ago' },
+const seedRepos = [
+  { full: 'akua/kente-shop', stars: 18, lang: 'TypeScript', private: false, updated: '2h ago' },
+  { full: 'akua/ankara-bookings', stars: 7, lang: 'TypeScript', private: true, updated: '1d ago' },
+  { full: 'akua/lagos-fintech', stars: 42, lang: 'Go', private: false, updated: '3d ago' },
+  { full: 'akua/dakar-news', stars: 12, lang: 'JavaScript', private: false, updated: '1w ago' },
+  { full: 'akua/sahel-cms', stars: 0, lang: 'Python', private: true, updated: '2w ago' },
+  { full: 'akua/nebula-docs', stars: 3, lang: 'MDX', private: false, updated: '1mo ago' },
 ];
 
-const CICD = () => {
+export default function CICD() {
+  const { lang } = useI18n();
+  const navigate = useNavigate();
+  const addProject = useApp((s) => s.addProject);
   const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [linkedRepos, setLinkedRepos] = useState<string[]>(['akua/kente-shop']);
-  const { deployments, updateDeployment } = useApp();
+  const [oauthOpen, setOauthOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [importing, setImporting] = useState<string | null>(null);
+  const [step, setStep] = useState<'select' | 'configure'>('select');
+  const [config, setConfig] = useState({ root: './', framework: 'Next.js', build: 'pnpm build', output: '.next', envs: [{ k: 'DATABASE_URL', v: '' }] });
 
-  const connectGithub = () => {
-    setConnecting(true);
-    setTimeout(() => {
-      setConnected(true);
-      setConnecting(false);
-      toast({ title: '✓ GitHub connected', description: '@akua' });
-    }, 1500);
+  const repos = seedRepos.filter((r) => r.full.toLowerCase().includes(q.toLowerCase()));
+
+  const startImport = (full: string) => {
+    setImporting(full);
+    setStep('configure');
   };
 
-  const toggle = (r: string) => setLinkedRepos((p) => p.includes(r) ? p.filter((x) => x !== r) : [...p, r]);
-
-  const rollback = (uid: string) => {
-    updateDeployment(uid, { state: 'BUILDING' });
-    setTimeout(() => {
-      updateDeployment(uid, { state: 'READY' });
-      toast({ title: '↩ Rolled back successfully' });
-    }, 2000);
+  const finishImport = () => {
+    if (!importing) return;
+    addProject({ name: importing.split('/')[1], framework: 'nextjs', template: 'github-import', status: 'building', repo: importing });
+    toast({ title: 'Project imported', description: `${importing} → deploying…` });
+    setImporting(null);
+    setStep('select');
+    navigate('/dashboard/deploy');
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8">
       <div>
-        <h1 className="font-display text-3xl font-bold mb-1">CI/CD Automation</h1>
-        <p className="text-muted-foreground">Auto-deploy on every push. Rollback in 1 click.</p>
+        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">CI / CD</p>
+        <h1 className="font-editorial text-4xl tracking-tight">
+          {lang === 'fr' ? <>Push. <em className="italic text-muted-foreground">Build. Ship.</em></> : <>Push. <em className="italic text-muted-foreground">Build. Ship.</em></>}
+        </h1>
       </div>
 
       {!connected ? (
-        <Card className="glass p-12 text-center">
-          <Github className="h-12 w-12 mx-auto mb-4 text-foreground/60" />
-          <h2 className="font-display text-xl font-semibold mb-2">Connect your GitHub</h2>
-          <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-            We'll set up GitHub Actions workflows so your projects auto-deploy on every push to main.
-          </p>
-          <Button onClick={connectGithub} disabled={connecting} className="gradient-cosmic glow">
-            {connecting ? <><Loader2 className="h-4 w-4 animate-spin" /> Connecting...</> : <><Github className="h-4 w-4" /> Connect GitHub</>}
-          </Button>
-        </Card>
+        <div className="border border-border">
+          <EmptyState
+            icon={<Github className="h-10 w-10" />}
+            title={lang === 'fr' ? 'Connectez GitHub' : 'Connect GitHub'}
+            description={lang === 'fr' ? 'Importez vos repositories pour activer les déploiements automatiques sur push.' : 'Import your repositories to enable automatic deployments on push.'}
+            action={
+              <Button onClick={() => setOauthOpen(true)} className="gap-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] text-white">
+                <Github className="h-4 w-4" /> {lang === 'fr' ? 'Continuer avec GitHub' : 'Continue with GitHub'}
+              </Button>
+            }
+          />
+        </div>
+      ) : step === 'select' ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 border border-border px-3 py-2">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={lang === 'fr' ? 'Filtrer les repositories…' : 'Filter repositories…'}
+              className="flex-1 bg-transparent outline-none text-[13px] font-mono"
+            />
+            <span className="text-[11px] font-mono text-muted-foreground">akua · {repos.length} repos</span>
+          </div>
+          <div className="border border-border">
+            {repos.map((r) => (
+              <div key={r.full} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition">
+                <Github className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[13px] truncate">{r.full}</span>
+                    {r.private && <Lock className="h-3 w-3 text-muted-foreground" />}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground font-mono">{r.lang} · ★ {r.stars} · {r.updated}</p>
+                </div>
+                <button onClick={() => startImport(r.full)} className="px-3 py-1 border border-border hover:border-foreground text-[12px] rounded-md transition">
+                  Import
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
-        <>
-          <Card className="glass p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display text-lg font-semibold flex items-center gap-2"><Github className="h-4 w-4" /> Linked repositories</h2>
-              <Badge className="gradient-cosmic border-0"><Check className="h-3 w-3 mr-1" /> @akua</Badge>
+        <div className="border border-border p-6 max-w-2xl">
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">{lang === 'fr' ? 'Configurer' : 'Configure'}</p>
+          <h3 className="font-editorial text-2xl mb-1">{importing}</h3>
+          <p className="text-[12px] font-mono text-muted-foreground mb-6">
+            <Check className="inline h-3 w-3 text-success" /> Detected <span className="text-foreground">Next.js 14</span> · pnpm-lock.yaml
+          </p>
+          <div className="space-y-4">
+            <Field label="Root directory">
+              <Input value={config.root} onChange={(e) => setConfig({ ...config, root: e.target.value })} className="font-mono" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Build command"><Input value={config.build} onChange={(e) => setConfig({ ...config, build: e.target.value })} className="font-mono" /></Field>
+              <Field label="Output directory"><Input value={config.output} onChange={(e) => setConfig({ ...config, output: e.target.value })} className="font-mono" /></Field>
             </div>
-            <div className="space-y-2">
-              {fakeRepos.map((r) => (
-                <div key={r.name} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30">
-                  <div className="flex items-center gap-3">
-                    <Github className="h-4 w-4" />
-                    <div>
-                      <p className="font-mono text-sm">{r.name}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-2">
-                        <GitBranch className="h-3 w-3" /> {r.branch} · {r.lastPush}
-                      </p>
-                    </div>
-                    {r.private && <Badge variant="outline" className="text-xs">private</Badge>}
+            <Field label="Environment variables">
+              <div className="space-y-2">
+                {config.envs.map((e, i) => (
+                  <div key={i} className="grid grid-cols-2 gap-2">
+                    <Input value={e.k} onChange={(ev) => {
+                      const c = [...config.envs]; c[i].k = ev.target.value; setConfig({ ...config, envs: c });
+                    }} className="font-mono text-[12px]" />
+                    <Input type="password" value={e.v} placeholder="value" onChange={(ev) => {
+                      const c = [...config.envs]; c[i].v = ev.target.value; setConfig({ ...config, envs: c });
+                    }} className="font-mono text-[12px]" />
                   </div>
-                  <Button
-                    size="sm"
-                    variant={linkedRepos.includes(r.name) ? 'default' : 'outline'}
-                    onClick={() => toggle(r.name)}
-                    className={linkedRepos.includes(r.name) ? 'gradient-cosmic' : ''}
-                  >
-                    {linkedRepos.includes(r.name) ? '✓ Linked' : 'Link'}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="glass p-5">
-            <h2 className="font-display text-lg font-semibold mb-3">Workflow config</h2>
-            <pre className="text-xs font-mono p-4 rounded-lg bg-muted/50 overflow-auto">{`# .github/workflows/nebula.yml
-name: NebulaOS Deploy
-on:
-  push:
-    branches: [main]
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: nebula/deploy@v1
-        with:
-          token: \${{ secrets.NEBULA_TOKEN }}`}</pre>
-          </Card>
-
-          <Card className="glass p-5">
-            <h2 className="font-display text-lg font-semibold mb-3">Deployment history</h2>
-            <div className="space-y-2">
-              {deployments.map((d) => (
-                <div key={d.uid} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50">
-                  <GitCommit className="h-4 w-4 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-mono text-sm truncate">{d.commit}</p>
-                    <p className="text-xs text-muted-foreground">{d.url} · {formatDistanceToNow(d.createdAt)} ago</p>
-                  </div>
-                  <Badge variant={d.state === 'READY' ? 'default' : d.state === 'BUILDING' ? 'secondary' : 'destructive'} className={d.state === 'READY' ? 'gradient-cosmic border-0' : ''}>{d.state}</Badge>
-                  {d.state === 'READY' && (
-                    <Button variant="ghost" size="sm" onClick={() => rollback(d.uid)}><RotateCcw className="h-3 w-3" /> Rollback</Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </>
+                ))}
+                <button onClick={() => setConfig({ ...config, envs: [...config.envs, { k: '', v: '' }] })} className="text-[11px] text-muted-foreground hover:text-foreground font-mono">+ add variable</button>
+              </div>
+            </Field>
+          </div>
+          <div className="flex gap-2 mt-8 pt-6 border-t border-border">
+            <button onClick={() => { setStep('select'); setImporting(null); }} className="px-3 py-1.5 text-[12px] text-muted-foreground hover:text-foreground">Cancel</button>
+            <Button onClick={finishImport} className="ml-auto gap-2"><GitBranch className="h-3.5 w-3.5" /> Deploy</Button>
+          </div>
+        </div>
       )}
+
+      {connected && step === 'select' && (
+        <div className="border-t border-border pt-6">
+          <h2 className="text-[13px] uppercase tracking-widest text-muted-foreground mb-3">{lang === 'fr' ? 'Repositories connectés' : 'Connected repositories'}</h2>
+          <div className="border border-border">
+            {[
+              { repo: 'akua/kente-shop', branch: 'main', auto: true, last: '2m ago' },
+              { repo: 'tunde/lagos-rides', branch: 'main', auto: true, last: '6h ago' },
+            ].map((c) => (
+              <div key={c.repo} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 text-[13px]">
+                <StatusDot tone="success" />
+                <span className="font-mono">{c.repo}</span>
+                <span className="text-muted-foreground font-mono text-[11px]">{c.branch}</span>
+                <span className="ml-auto text-[11px] text-muted-foreground font-mono">last push {c.last}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <GitHubOAuthDialog open={oauthOpen} onOpenChange={setOauthOpen} onAuthorized={() => setConnected(true)} />
     </div>
   );
-};
+}
 
-export default CICD;
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[11px] uppercase tracking-widest text-muted-foreground block mb-1.5">{label}</label>
+      {children}
+    </div>
+  );
+}

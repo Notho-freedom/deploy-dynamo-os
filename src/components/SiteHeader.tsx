@@ -1,54 +1,49 @@
-import { useT, useI18n } from '@/lib/i18n';
-import { Button } from '@/components/ui/button';
 import { Link, useNavigate } from 'react-router-dom';
-import { Sparkles, Globe } from 'lucide-react';
+import { useT, useI18n } from '@/lib/i18n';
+import { Wordmark } from '@/components/Logo';
 import { useApp } from '@/lib/store';
 
-export const SiteHeader = () => {
+export function SiteHeader() {
   const t = useT();
   const { lang, setLang } = useI18n();
   const user = useApp((s) => s.user);
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-50 glass">
-      <div className="container flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="relative h-8 w-8 rounded-lg gradient-cosmic flex items-center justify-center glow">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <span className="font-display text-xl font-bold">Nebula<span className="text-gradient-cosmic">OS</span></span>
+    <header className="sticky top-0 z-40 backdrop-blur-md bg-background/80 border-b border-border">
+      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center">
+        <Link to="/" className="text-foreground hover:opacity-80 transition">
+          <Wordmark />
         </Link>
-
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
-          <a href="#modules" className="text-muted-foreground hover:text-foreground transition">{t.nav.features}</a>
-          <a href="#pricing" className="text-muted-foreground hover:text-foreground transition">{t.nav.pricing}</a>
-          <a href="#faq" className="text-muted-foreground hover:text-foreground transition">{t.nav.docs}</a>
+        <nav className="ml-10 hidden md:flex items-center gap-7 text-[13px] text-muted-foreground">
+          <a href="#modules" className="hover:text-foreground transition">{t.nav.features}</a>
+          <a href="#how" className="hover:text-foreground transition">{lang === 'fr' ? 'Comment ça marche' : 'How it works'}</a>
+          <a href="#pricing" className="hover:text-foreground transition">{t.nav.pricing}</a>
+          <a href="#faq" className="hover:text-foreground transition">FAQ</a>
         </nav>
-
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1">
           <button
             onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border hover:bg-muted text-sm font-medium transition"
-            aria-label="Toggle language"
+            className="px-2 py-1 text-[11px] font-mono text-muted-foreground hover:text-foreground"
           >
-            <Globe className="h-3.5 w-3.5" />
-            <span className="font-mono">{lang.toUpperCase()}</span>
+            {lang.toUpperCase()} ↔ {lang === 'fr' ? 'EN' : 'FR'}
           </button>
           {user ? (
-            <Button onClick={() => navigate('/dashboard')} className="gradient-cosmic glow">
-              Dashboard
-            </Button>
+            <button onClick={() => navigate('/dashboard')} className="ml-2 px-3 py-1.5 text-[13px] border border-border hover:border-foreground rounded-md transition">
+              {lang === 'fr' ? 'Ouvrir l\'app' : 'Open app'} →
+            </button>
           ) : (
             <>
-              <Button variant="ghost" onClick={() => navigate('/auth')}>{t.nav.login}</Button>
-              <Button onClick={() => navigate('/auth?mode=signup')} className="gradient-cosmic glow">
+              <Link to="/auth" className="ml-2 px-3 py-1.5 text-[13px] text-muted-foreground hover:text-foreground transition">
+                {t.nav.login}
+              </Link>
+              <Link to="/auth" className="px-3 py-1.5 text-[13px] bg-foreground text-background hover:bg-foreground/90 rounded-md transition">
                 {t.nav.start}
-              </Button>
+              </Link>
             </>
           )}
         </div>
       </div>
     </header>
   );
-};
+}
