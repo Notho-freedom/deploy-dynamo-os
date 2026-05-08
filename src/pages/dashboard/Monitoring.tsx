@@ -1,116 +1,114 @@
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Activity, AlertTriangle, Clock, Server } from 'lucide-react';
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
+import { useI18n } from '@/lib/i18n';
+import { Sparkline } from '@/components/Sparkline';
+import { useState } from 'react';
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-const requestsData = Array.from({ length: 24 }, (_, i) => ({
-  hour: `${i}h`,
-  requests: Math.round(800 + Math.random() * 1200 + (i > 8 && i < 22 ? 600 : 0)),
-  errors: Math.round(Math.random() * 30),
-}));
+const ranges = ['1h', '24h', '7d', '30d'] as const;
 
-const responseData = Array.from({ length: 12 }, (_, i) => ({
-  time: `${i * 2}h`,
-  p50: 80 + Math.random() * 30,
-  p95: 180 + Math.random() * 80,
-  p99: 350 + Math.random() * 120,
-}));
+const reqSeries = Array.from({ length: 48 }, (_, i) => ({ t: i, v: 80 + Math.sin(i / 4) * 30 + Math.random() * 25 }));
+const latSeries = Array.from({ length: 48 }, (_, i) => ({ t: i, p50: 80 + Math.random() * 20, p95: 200 + Math.random() * 80, p99: 320 + Math.random() * 120 }));
+const errSeries = Array.from({ length: 48 }, (_, i) => ({ t: i, v: Math.max(0, Math.random() * 5 - 3) }));
 
-const recentLogs = [
-  { ts: '14:32:11', method: 'POST', path: '/api/orders', status: 201, dur: 142 },
-  { ts: '14:32:09', method: 'GET', path: '/api/products', status: 200, dur: 38 },
-  { ts: '14:32:05', method: 'POST', path: '/api/payment/mtn', status: 200, dur: 1820 },
-  { ts: '14:31:58', method: 'GET', path: '/api/products/2', status: 200, dur: 22 },
-  { ts: '14:31:52', method: 'POST', path: '/api/auth/login', status: 401, dur: 89 },
-  { ts: '14:31:47', method: 'GET', path: '/api/dashboard', status: 200, dur: 156 },
-  { ts: '14:31:40', method: 'PATCH', path: '/api/users/me', status: 500, dur: 2104 },
-];
+export default function Monitoring() {
+  const { lang } = useI18n();
+  const [range, setRange] = useState<typeof ranges[number]>('24h');
 
-const Monitoring = () => {
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="font-display text-3xl font-bold mb-1">Monitoring</h1>
-        <p className="text-muted-foreground">Real-time logs, errors, performance & uptime.</p>
+    <div className="space-y-8">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Monitoring</p>
+          <h1 className="font-editorial text-4xl tracking-tight">{lang === 'fr' ? <>Performance & <em className="italic text-muted-foreground">erreurs</em></> : <>Performance & <em className="italic text-muted-foreground">errors</em></>}</h1>
+        </div>
+        <div className="inline-flex border border-border text-[11px] font-mono">
+          {ranges.map((r) => (
+            <button key={r} onClick={() => setRange(r)} className={`px-3 py-1.5 transition ${range === r ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+              {r}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-y border-border divide-x divide-border">
         {[
-          { label: 'Uptime (30d)', value: '99.97%', icon: Activity, color: 'text-accent' },
-          { label: 'Avg latency', value: '142ms', icon: Clock, color: 'text-primary' },
-          { label: 'Requests / 24h', value: '24.8K', icon: Server, color: 'text-gold' },
-          { label: 'Errors / 24h', value: '127', icon: AlertTriangle, color: 'text-destructive' },
-        ].map((s, i) => (
-          <Card key={i} className="glass p-5">
-            <s.icon className={`h-5 w-5 ${s.color} mb-2`} />
-            <p className="text-2xl font-display font-bold">{s.value}</p>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-          </Card>
+          { l: 'Requests', v: '142.8k', s: reqSeries.map((d) => d.v) },
+          { l: 'p50 latency', v: '92ms', s: latSeries.map((d) => d.p50) },
+          { l: 'p99 latency', v: '412ms', s: latSeries.map((d) => d.p99) },
+          { l: 'Error rate', v: '0.4%', s: errSeries.map((d) => d.v) },
+        ].map((k) => (
+          <div key={k.l} className="px-5 py-5">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">{k.l}</p>
+            <p className="font-editorial text-3xl num mt-1">{k.v}</p>
+            <Sparkline data={k.s} width={100} height={20} stroke="hsl(var(--primary))" />
+          </div>
         ))}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="glass p-5">
-          <h3 className="font-display text-lg font-semibold mb-4">Requests (last 24h)</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={requestsData}>
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
-                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
-              <Area type="monotone" dataKey="requests" stroke="hsl(var(--primary))" fill="url(#g1)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
+        <ChartBlock title="Requests / sec" data={reqSeries} dataKey="v" color="hsl(var(--primary))" />
+        <ChartBlock title="Latency p50 / p95 / p99" data={latSeries} multi color="hsl(var(--accent))" />
+      </div>
 
-        <Card className="glass p-5">
-          <h3 className="font-display text-lg font-semibold mb-4">Response time (p50/p95/p99)</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={responseData}>
-              <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
-              <Line type="monotone" dataKey="p50" stroke="hsl(var(--accent))" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="p95" stroke="hsl(var(--gold))" dot={false} strokeWidth={2} />
-              <Line type="monotone" dataKey="p99" stroke="hsl(var(--secondary))" dot={false} strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card className="glass p-5">
-          <h3 className="font-display text-lg font-semibold mb-4">Errors (24h)</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={requestsData}>
-              <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} />
-              <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
-              <Bar dataKey="errors" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card className="glass p-5">
-          <h3 className="font-display text-lg font-semibold mb-4">Live logs</h3>
-          <div className="font-mono text-xs space-y-1 max-h-56 overflow-auto">
-            {recentLogs.map((l, i) => (
-              <div key={i} className="flex gap-2 items-center py-1 border-b border-border/30">
-                <span className="text-muted-foreground">{l.ts}</span>
-                <Badge variant="outline" className="text-[10px] py-0 px-1.5">{l.method}</Badge>
-                <span className="flex-1 truncate">{l.path}</span>
-                <span className={l.status >= 500 ? 'text-destructive' : l.status >= 400 ? 'text-gold' : 'text-accent'}>{l.status}</span>
-                <span className="text-muted-foreground">{l.dur}ms</span>
-              </div>
-            ))}
-          </div>
-        </Card>
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="border border-border">
+          <p className="px-4 py-2.5 border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">Top routes</p>
+          <table className="w-full text-[12.5px] font-mono">
+            <tbody className="divide-y divide-border">
+              {[
+                ['/api/products', '42.1k', '38ms'],
+                ['/checkout', '18.4k', '142ms'],
+                ['/api/momo/webhook', '12.8k', '88ms'],
+                ['/_next/static/*', '38.0k', '12ms'],
+                ['/dashboard', '4.2k', '210ms'],
+              ].map(([r, c, l]) => (
+                <tr key={r} className="hover:bg-muted/30"><td className="px-4 py-2.5 truncate">{r}</td><td className="px-4 py-2.5 text-right num">{c}</td><td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">{l}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="border border-border">
+          <p className="px-4 py-2.5 border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">Top errors</p>
+          <table className="w-full text-[12.5px] font-mono">
+            <tbody className="divide-y divide-border">
+              {[
+                ['TimeoutError', 'send-invoice', '24'],
+                ['ValidationError', '/api/checkout', '12'],
+                ['RateLimitExceeded', '/api/auth', '8'],
+                ['DBConnectionError', 'orders', '3'],
+              ].map(([e, r, c]) => (
+                <tr key={e} className="hover:bg-muted/30"><td className="px-4 py-2.5 text-destructive">{e}</td><td className="px-4 py-2.5 text-muted-foreground">{r}</td><td className="px-4 py-2.5 text-right num">{c}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
-};
+}
 
-export default Monitoring;
+function ChartBlock({ title, data, dataKey, color, multi }: { title: string; data: any[]; dataKey?: string; color: string; multi?: boolean }) {
+  return (
+    <div className="border border-border">
+      <p className="px-4 py-2.5 border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">{title}</p>
+      <div className="h-52 px-2 pb-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="t" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} width={32} />
+            <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', fontSize: 11, fontFamily: 'JetBrains Mono' }} />
+            {multi ? (
+              <>
+                <Line type="monotone" dataKey="p50" stroke="hsl(var(--success))" strokeWidth={1.2} dot={false} />
+                <Line type="monotone" dataKey="p95" stroke="hsl(var(--warning))" strokeWidth={1.2} dot={false} />
+                <Line type="monotone" dataKey="p99" stroke="hsl(var(--destructive))" strokeWidth={1.2} dot={false} />
+              </>
+            ) : (
+              <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={1.4} dot={false} />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}

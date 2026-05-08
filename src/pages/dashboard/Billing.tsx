@@ -1,196 +1,217 @@
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
+import { useI18n } from '@/lib/i18n';
+import { useApp } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { useApp } from '@/lib/store';
-import { Wallet, Plus, ArrowDownLeft, ArrowUpRight, Smartphone, CreditCard, Loader2, Check } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { MobileMoneyDialog } from '@/components/MobileMoneyDialog';
+import { ArrowUpRight, CreditCard, Check, Minus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
-const Billing = () => {
+const tabs = ['overview', 'topup', 'transactions', 'plans', 'invoices'] as const;
+const presetAmounts = [1000, 5000, 10000, 25000, 50000];
+const providers = [
+  { k: 'mtn', name: 'MTN MoMo', tint: 'bg-[#FFCC00] text-black', desc: 'Côte d\'Ivoire · Cameroun · Ghana' },
+  { k: 'orange', name: 'Orange Money', tint: 'bg-[#FF7900] text-white', desc: 'Sénégal · Mali · CI · Cameroun' },
+  { k: 'wave', name: 'Wave', tint: 'bg-[#1DC8E1] text-black', desc: 'Sénégal · Côte d\'Ivoire' },
+  { k: 'moov', name: 'Moov Money', tint: 'bg-[#005AAB] text-white', desc: 'Bénin · Togo · Burkina' },
+  { k: 'stripe', name: 'Carte (Stripe)', tint: 'bg-foreground text-background', desc: 'Visa · Mastercard · Amex' },
+] as const;
+
+export default function Billing() {
+  const { lang } = useI18n();
   const { wallet, addWalletTx } = useApp();
-  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<typeof tabs[number]>('overview');
   const [amount, setAmount] = useState(5000);
-  const [method, setMethod] = useState<'mtn' | 'orange' | 'wave' | 'stripe'>('mtn');
-  const [phone, setPhone] = useState('');
-  const [step, setStep] = useState<'choose' | 'confirm' | 'pending' | 'done'>('choose');
-
-  const proceed = () => {
-    setStep('pending');
-    setTimeout(() => {
-      addWalletTx({
-        type: 'topup',
-        amount,
-        currency: method === 'stripe' ? 'USD' : 'XOF',
-        method,
-        description: `Recharge via ${method.toUpperCase()}`,
-        status: 'succeeded',
-      });
-      setStep('done');
-      toast({ title: '✅ Top-up successful', description: `${amount.toLocaleString()} ${method === 'stripe' ? 'USD' : 'FCFA'}` });
-    }, method === 'stripe' ? 1500 : 3000);
-  };
-
-  const reset = () => { setStep('choose'); setOpen(false); setAmount(5000); setPhone(''); };
-
-  const methods = [
-    { id: 'mtn' as const, name: 'MTN MoMo', color: 'from-gold to-secondary', icon: Smartphone },
-    { id: 'orange' as const, name: 'Orange Money', color: 'from-secondary to-gold', icon: Smartphone },
-    { id: 'wave' as const, name: 'Wave', color: 'from-accent to-primary', icon: Smartphone },
-    { id: 'stripe' as const, name: 'Stripe (Card)', color: 'from-primary to-accent', icon: CreditCard },
-  ];
+  const [providerOpen, setProviderOpen] = useState<typeof providers[number]['k'] | null>(null);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="font-display text-3xl font-bold mb-1">Billing & Wallet</h1>
-        <p className="text-muted-foreground">Pay-as-you-go. Mobile Money + Stripe.</p>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="glass p-6 lg:col-span-2 relative overflow-hidden glow">
-          <div className="absolute inset-0 gradient-nebula opacity-20" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-2 text-muted-foreground text-sm">
-              <Wallet className="h-4 w-4" /> Available balance
-            </div>
-            <p className="text-5xl font-display font-bold text-gradient-aurora mb-2">
-              {wallet.balanceFcfa.toLocaleString()} <span className="text-2xl">FCFA</span>
-            </p>
-            <p className="text-muted-foreground">≈ ${wallet.balanceUsd.toFixed(2)} USD</p>
-            <Button onClick={() => setOpen(true)} className="mt-6 gradient-gold text-gold-foreground glow-gold">
-              <Plus className="h-4 w-4" /> Top up
-            </Button>
-          </div>
-        </Card>
-
-        <Card className="glass p-6">
-          <h3 className="font-display text-lg font-semibold mb-3">This month</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Hosting</span><span className="font-mono text-sm">2 100 FCFA</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Domains</span><span className="font-mono text-sm">800 FCFA</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Email</span><span className="font-mono text-sm">450 FCFA</span></div>
-            <div className="flex justify-between border-t border-border pt-3 font-bold"><span>Total</span><span className="font-mono">3 350 FCFA</span></div>
-          </div>
-        </Card>
-      </div>
-
-      <Card className="glass p-6">
-        <h3 className="font-display text-lg font-semibold mb-4">Transaction history</h3>
-        <div className="space-y-2">
-          {wallet.txs.map((tx) => (
-            <div key={tx.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50">
-              <div className={`h-9 w-9 rounded-full flex items-center justify-center ${tx.amount > 0 ? 'bg-accent/20 text-accent' : 'bg-secondary/20 text-secondary'}`}>
-                {tx.amount > 0 ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
-              </div>
-              <div className="flex-1">
-                <p className="font-medium text-sm">{tx.description}</p>
-                <p className="text-xs text-muted-foreground">{formatDistanceToNow(tx.createdAt)} ago{tx.method && ` · ${tx.method.toUpperCase()}`}</p>
-              </div>
-              <div className="text-right">
-                <p className={`font-mono font-semibold ${tx.amount > 0 ? 'text-accent' : ''}`}>
-                  {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()} {tx.currency}
-                </p>
-                <Badge variant="outline" className="text-xs">{tx.status}</Badge>
-              </div>
-            </div>
-          ))}
+    <div className="space-y-8">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Billing & Wallet</p>
+          <p className="font-editorial text-5xl num">{wallet.balanceFcfa.toLocaleString('fr-FR')} <span className="text-xl text-muted-foreground">FCFA</span></p>
+          <p className="text-[12px] text-muted-foreground font-mono mt-1">≈ ${wallet.balanceUsd.toFixed(2)} USD</p>
         </div>
-      </Card>
+        <Button onClick={() => setTab('topup')} className="gap-2"><ArrowUpRight className="h-3.5 w-3.5" /> {lang === 'fr' ? 'Recharger' : 'Top up'}</Button>
+      </div>
 
-      <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); setOpen(o); }}>
-        <DialogContent className="glass">
-          <DialogHeader>
-            <DialogTitle className="font-display">
-              {step === 'choose' && 'Top up wallet'}
-              {step === 'confirm' && 'Confirm payment'}
-              {step === 'pending' && 'Processing...'}
-              {step === 'done' && 'Success!'}
-            </DialogTitle>
-          </DialogHeader>
+      <div className="border-b border-border flex gap-1">
+        {tabs.map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`px-3 py-2 text-[12.5px] capitalize border-b-2 -mb-px transition ${tab === t ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
 
-          {step === 'choose' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-1 block">Amount</label>
-                <Input type="number" value={amount} onChange={(e) => setAmount(+e.target.value)} className="font-mono text-lg" />
-                <div className="flex gap-2 mt-2">
-                  {[2000, 5000, 10000, 25000].map((v) => (
-                    <button key={v} onClick={() => setAmount(v)} className="text-xs px-3 py-1 rounded-full border border-border hover:border-primary">{v.toLocaleString()}</button>
-                  ))}
+      {tab === 'overview' && (
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 border border-border">
+            <p className="px-4 py-2.5 border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">{lang === 'fr' ? 'Coûts du mois' : 'Month-to-date'}</p>
+            {[
+              { l: 'Hosting · CDN', v: '4 200 FCFA' },
+              { l: 'Postgres · backup', v: '1 800 FCFA' },
+              { l: 'Edge Functions', v: '950 FCFA' },
+              { l: 'Bandwidth', v: '2 100 FCFA' },
+              { l: 'Domain renewals', v: '3 200 FCFA' },
+            ].map((c) => (
+              <div key={c.l} className="px-4 py-3 border-b border-border last:border-0 flex items-center text-[13px]">
+                <span className="flex-1">{c.l}</span><span className="font-mono text-muted-foreground">{c.v}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border border-border p-5">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">Plan</p>
+            <p className="font-editorial text-2xl">Starter</p>
+            <p className="text-[12px] text-muted-foreground mt-1">2 000 FCFA / mois · renouvelé le 12 mai</p>
+            <Button variant="outline" className="w-full mt-4" onClick={() => setTab('plans')}>{lang === 'fr' ? 'Changer de plan' : 'Change plan'}</Button>
+          </div>
+        </div>
+      )}
+
+      {tab === 'topup' && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="border border-border p-6">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">{lang === 'fr' ? 'Montant' : 'Amount'}</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {presetAmounts.map((a) => (
+                <button key={a} onClick={() => setAmount(a)} className={`px-3 py-1.5 border text-[12px] font-mono num transition ${amount === a ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:border-foreground'}`}>
+                  {a.toLocaleString('fr-FR')} FCFA
+                </button>
+              ))}
+            </div>
+            <Input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
+              className="font-mono num"
+              placeholder="Custom amount"
+            />
+          </div>
+          <div className="border border-border">
+            <p className="px-4 py-2.5 border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">{lang === 'fr' ? 'Méthode de paiement' : 'Payment method'}</p>
+            {providers.map((p) => (
+              <button
+                key={p.k}
+                onClick={() => setProviderOpen(p.k)}
+                className="w-full flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition text-left"
+              >
+                <span className={`px-2 py-1 text-[11px] font-mono ${p.tint} w-24 text-center`}>{p.k === 'stripe' ? <CreditCard className="h-3 w-3 inline" /> : p.name.split(' ')[0]}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px]">{p.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{p.desc}</p>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Method</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {methods.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => setMethod(m.id)}
-                      className={`p-3 rounded-lg border text-left transition ${method === m.id ? 'border-primary glow' : 'border-border'}`}
-                    >
-                      <div className={`h-8 w-8 rounded-md bg-gradient-to-br ${m.color} flex items-center justify-center mb-2`}>
-                        <m.icon className="h-4 w-4 text-white" />
-                      </div>
-                      <p className="text-sm font-medium">{m.name}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={() => setStep('confirm')} className="gradient-cosmic glow w-full">Continue</Button>
-              </DialogFooter>
-            </div>
-          )}
+                <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-          {step === 'confirm' && (
-            <div className="space-y-4">
-              {method !== 'stripe' && (
-                <div>
-                  <label className="text-sm font-medium mb-1 block">Phone number</label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+225 07 00 00 00 00" className="font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">You'll receive a confirmation prompt on your phone.</p>
-                </div>
-              )}
-              {method === 'stripe' && (
-                <div className="text-sm text-muted-foreground">Redirecting to Stripe Checkout (simulated)...</div>
-              )}
-              <div className="p-4 rounded-lg bg-muted/50 space-y-1 text-sm">
-                <div className="flex justify-between"><span>Amount</span><span className="font-mono">{amount.toLocaleString()} {method === 'stripe' ? 'USD' : 'FCFA'}</span></div>
-                <div className="flex justify-between"><span>Method</span><span>{methods.find((m) => m.id === method)?.name}</span></div>
-                <div className="flex justify-between"><span>Fee</span><span>0</span></div>
-              </div>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setStep('choose')}>Back</Button>
-                <Button onClick={proceed} className="gradient-cosmic glow">Pay now</Button>
-              </DialogFooter>
-            </div>
-          )}
+      {tab === 'transactions' && (
+        <div className="border border-border">
+          <table className="w-full">
+            <thead className="border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">
+              <tr><th className="text-left font-normal px-4 py-2.5">Type</th><th className="text-left font-normal px-4 py-2.5">Description</th><th className="text-left font-normal px-4 py-2.5">Method</th><th className="text-right font-normal px-4 py-2.5">Amount</th><th className="text-right font-normal px-4 py-2.5">Status</th><th className="text-right font-normal px-4 py-2.5">When</th></tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {wallet.txs.map((tx) => (
+                <tr key={tx.id} className="text-[13px] hover:bg-muted/30">
+                  <td className="px-4 py-3 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{tx.type}</td>
+                  <td className="px-4 py-3">{tx.description}</td>
+                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{tx.method ?? '—'}</td>
+                  <td className={`px-4 py-3 text-right font-mono num ${tx.amount > 0 ? 'text-success' : 'text-foreground'}`}>{tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString('fr-FR')} {tx.currency}</td>
+                  <td className="px-4 py-3 text-right text-[11px] uppercase tracking-wide text-muted-foreground">{tx.status}</td>
+                  <td className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground">{formatDistanceToNow(tx.createdAt, { addSuffix: false })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          {step === 'pending' && (
-            <div className="py-8 text-center">
-              <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-              <p className="font-medium">Awaiting confirmation...</p>
-              <p className="text-sm text-muted-foreground mt-1">{method !== 'stripe' ? 'Check your phone' : 'Processing payment'}</p>
-            </div>
-          )}
+      {tab === 'plans' && <PlansComparison />}
 
-          {step === 'done' && (
-            <div className="py-6 text-center">
-              <div className="h-14 w-14 rounded-full gradient-cosmic mx-auto flex items-center justify-center mb-4 glow">
-                <Check className="h-7 w-7 text-primary-foreground" />
-              </div>
-              <p className="font-display text-lg font-semibold">Wallet topped up</p>
-              <p className="text-sm text-muted-foreground">+{amount.toLocaleString()} {method === 'stripe' ? 'USD' : 'FCFA'}</p>
-              <Button onClick={reset} className="mt-4 w-full">Done</Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {tab === 'invoices' && (
+        <div className="border border-border">
+          <table className="w-full">
+            <thead className="border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">
+              <tr><th className="text-left font-normal px-4 py-2.5">Invoice</th><th className="text-left font-normal px-4 py-2.5">Period</th><th className="text-right font-normal px-4 py-2.5">Amount</th><th className="text-right font-normal px-4 py-2.5">Status</th><th></th></tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {[
+                ['INV-2026-04', 'Apr 2026', '12 250 FCFA', 'paid'],
+                ['INV-2026-03', 'Mar 2026', '9 800 FCFA', 'paid'],
+                ['INV-2026-02', 'Feb 2026', '7 400 FCFA', 'paid'],
+              ].map(([id, p, a, s]) => (
+                <tr key={id} className="text-[13px] hover:bg-muted/30">
+                  <td className="px-4 py-3 font-mono">{id}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{p}</td>
+                  <td className="px-4 py-3 text-right font-mono num">{a}</td>
+                  <td className="px-4 py-3 text-right text-[11px] uppercase tracking-wide text-success">{s}</td>
+                  <td className="px-4 py-3 text-right"><a className="text-[12px] text-muted-foreground hover:text-foreground">PDF ↓</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {providerOpen && providerOpen !== 'stripe' && (
+        <MobileMoneyDialog
+          open
+          onOpenChange={() => setProviderOpen(null)}
+          provider={providerOpen}
+          amountFcfa={amount}
+          onSuccess={(ref) => addWalletTx({ type: 'topup', amount, currency: 'XOF', method: providerOpen, description: `Recharge ${providerOpen.toUpperCase()} · ${ref}`, status: 'succeeded' })}
+        />
+      )}
     </div>
   );
-};
+}
 
-export default Billing;
+function PlansComparison() {
+  const plans = [
+    { name: 'Free', price: '0', current: false },
+    { name: 'Starter', price: '2 000', current: true },
+    { name: 'Pro', price: '10 000', current: false },
+    { name: 'Business', price: '40 000', current: false },
+  ];
+  const rows: Array<{ feat: string; v: (string | boolean)[] }> = [
+    { feat: 'Projects', v: ['1', '5', 'Unlimited', 'Unlimited'] },
+    { feat: 'Bandwidth', v: ['10 GB', '100 GB', '1 TB', '5 TB'] },
+    { feat: 'Postgres', v: ['256 MB', '1 GB', '10 GB', '50 GB'] },
+    { feat: 'Edge functions', v: [true, true, true, true] },
+    { feat: 'Mobile Money', v: [true, true, true, true] },
+    { feat: 'Custom domains', v: ['—', '1', '3', '10'] },
+    { feat: 'Support', v: ['Community', 'Email', 'Priority', 'Dedicated SLA'] },
+  ];
+  return (
+    <div className="border border-border">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-border">
+            <th className="text-left p-5"></th>
+            {plans.map((p) => (
+              <th key={p.name} className={`text-left p-5 align-bottom ${p.current ? 'bg-primary/5' : ''}`}>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">{p.name} {p.current && <span className="ml-1 text-primary normal-case">· current</span>}</p>
+                <p className="font-editorial text-2xl num">{p.price} <span className="text-xs text-muted-foreground">FCFA/mo</span></p>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.feat} className="border-b border-border last:border-0">
+              <td className="p-3.5 text-[13px] text-muted-foreground">{r.feat}</td>
+              {r.v.map((val, i) => (
+                <td key={i} className={`p-3.5 text-[13px] ${plans[i].current ? 'bg-primary/5' : ''}`}>
+                  {typeof val === 'boolean' ? (val ? <Check className="h-4 w-4 text-success" /> : <Minus className="h-4 w-4 text-muted-foreground/50" />) : <span className="font-mono num">{val}</span>}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
