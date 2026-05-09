@@ -29,14 +29,20 @@ export default function Index() {
 
   useEffect(() => {
     let i = 0;
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     setStreamed([]);
+    setStreaming(true);
     const tick = () => {
+      if (cancelled) return;
       if (i >= heroScript.length) { setStreaming(false); return; }
-      setStreamed((s) => [...s, heroScript[i]]);
+      const item = heroScript[i];
+      if (item) setStreamed((s) => [...s, item]);
       i++;
-      setTimeout(tick, 380 + Math.random() * 320);
+      timeout = setTimeout(tick, 380 + Math.random() * 320);
     };
     tick();
+    return () => { cancelled = true; if (timeout) clearTimeout(timeout); };
   }, []);
 
   return (

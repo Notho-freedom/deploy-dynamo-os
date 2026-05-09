@@ -1,172 +1,123 @@
+# Itération 3 — Assets, polish, workflows complets, premières connexions réelles
 
-# Refonte NebulaOS — sortir du look "IA générique"
+## 1. Fix runtime error (priorité immédiate)
 
-Objectif: tuer les patterns reconnaissables (cartes partout, bordures partout, gradients violet/orange criards, hero "headline + 2 CTA + 3 features cards"), et atteindre un niveau Vercel/Linear avec accents afro subtils. Workflows pixel-close à Vercel (Deploy/CICD), Lovable (Builder/UI), Lovable Cloud + Render (Backend).
+`Stepper` reçoit `current` au-delà de `steps.length` ou un step `undefined`. Trace : `at Array.map` → composant qui lit `.tone` sur un élément `undefined`. Probablement `Stepper.tsx` ou `Terminal.tsx` (lignes mappées). 
 
----
+Action : durcir les composants partagés (`Stepper`, `Terminal`, `Sparkline`, `StatusDot`) avec guards (`?.tone`, `current = Math.min(current, steps.length)`), et corriger l'appelant fautif (Deploy.tsx — `setStepIdx(i + 1)` peut dépasser `steps.length` au dernier step).
 
-## 1. Nouveau design system (refonte tokens)
+## 2. Génération assets de partage
 
-Casser le violet/orange saturé actuel. Nouvelle base sobre type Linear/Vercel + accents afro intégrés finement.
+Tous via imagegen, palette neutre + ocre `#D97706`, géométrie inspirée adinkra, zéro vomi IA :
 
-- **Palette**
-  - `background` quasi-noir neutre `#0A0A0B` (pas violet)
-  - `foreground` blanc cassé `#EDEDED`
-  - `muted` gris froids `#9CA3AF` / surfaces `#111113`, `#17171A`
-  - `border` `#1F1F23` (1px, jamais 2px, jamais arrondies de partout)
-  - **1 seul accent fort**: ocre/terre cuite `#D97706` style bogolan (pas orange fluo)
-  - **1 accent secondaire**: indigo profond `#4338CA` (très parcimonieux)
-  - Or `#E8B14A` réservé aux états premium / hover sur liens éditoriaux
-- **Typographie**
-  - UI: `Geist` ou `Inter` (déjà présent), tracking serré, poids 400/500/600 — **bannir les `font-bold` partout**
-  - Display éditorial: `Fraunces` ou `Instrument Serif` italique pour H1/baselines (touche éditoriale qui casse l'IA)
-  - Mono: `Geist Mono` / `JetBrains Mono` pour data, IDs, URLs, logs
-- **Radius** `--radius: 6px` (pas 12px), surfaces majoritairement carrées, arrondi seulement sur boutons & inputs
-- **Élévation**: aucune ombre par défaut. Séparation par `border-top` 1px + couleur de surface — pas de "glass" ni de glow
-- **Density**: dashboards en lignes/listes/tableaux, pas en grille de cartes. Fin liserés, beaucoup de mono, beaucoup de vide
-- **Motion**: micro (150–200ms ease-out), zéro pulse-glow, zéro shimmer permanent, zéro float
-- **Suppression**: classes `.glass`, `.glow`, `.gradient-cosmic` partout; `.wax-pattern` et `.stars-bg` retirés des layouts (on les ressort uniquement comme texture éditoriale ponctuelle sur landing/hero, pas sous tout l'app)
+- `public/favicon.png` (512×512, transparent) — mark NebulaOS
+- `public/favicon-32.png`, `public/apple-touch-icon.png` (180×180)
+- `src/assets/og-default.jpg` (1200×630) — wordmark + tagline serif + texture wax discrète
+- `src/assets/og-builder.jpg`, `og-deploy.jpg`, `og-cloud.jpg` (1200×630) — variantes par module
+- `src/assets/social-square.jpg` (1080×1080) — LinkedIn/IG
+- `src/assets/social-banner.jpg` (1500×500) — Twitter/X header
+- `src/assets/logo-mark.svg`, `logo-wordmark.svg` — refonte vectorielle propre (remplace `Logo.tsx` SVG inline si meilleur)
+- `src/assets/separator-1/2/3.svg` — glyphes éditoriaux
+- 3 mini-screenshots stylisés pour la landing (Builder, Deploy, Backend) en 1200×800
 
-Accents afro **discrets**:
-- Bordure haute 1px en dégradé bogolan sur le header app (4px de gradient subtil, pas plus)
-- Motif géométrique (kente/adinkra simplifié SVG) en watermark 4% d'opacité sur sections éditoriales
-- Ornement séparateur (petit glyphe adinkra) entre sections de la landing
+Mise à jour `index.html` : `<link rel="icon">`, `apple-touch-icon`, OG/Twitter pointant sur les assets locaux (pas l'URL GCS actuelle), `theme-color`, manifest minimal.
 
-## 2. Assets à générer
+## 3. Polish navigation dashboard
 
-- Logo NebulaOS SVG (mark géométrique inspiré adinkra "Nyame Dua" + wordmark)
-- 1 illustration hero éditoriale (texture wax très épurée, dominante terre cuite/noir)
-- 3 motifs séparateurs SVG (glyphes géométriques)
-- 1 OG image
-- Favicons
+Sidebar actuelle trop serrée. Cibles :
 
-Tous via imagegen (premium pour le hero, fast pour le reste), stockés dans `src/assets/`.
+- Items : `py-1.5` → `py-2.5`, gap icône/label `gap-2` → `gap-3`
+- Sections : ajouter `mt-6` entre groupes (`Workspace`, `Project`, `Account`), label section en `text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 px-3 mb-2`
+- Indicateur actif : barre 2px ocre + `bg-muted/30` plus visible
+- Largeur sidebar : 220 → 240px pour respirer
+- Topbar : `gap-2` → `gap-4` entre breadcrumb / ⌘K / status / lang / avatar
 
-## 3. Refonte Landing (`Index.tsx`)
+## 4. Complétion vues & workflows pixel-close
 
-Casser l'ossature "hero + grid features + pricing + faq".
+Audit + complétion par module (rester fidèle aux refs) :
 
-Nouvelle structure éditoriale:
-1. **Header** ultra-minimal (wordmark gauche, 4 liens centrés mono, Sign in / Get started droite, ligne 1px en bas)
-2. **Hero éditorial** asymétrique: H1 en serif italique mêlé sans-serif ("Build, ship & **monétiser** depuis l'Afrique"), sous-titre court, **un seul** CTA primaire + lien secondaire, à droite un bloc "terminal live" qui tape une commande `nebula deploy ./` avec sortie streamée
-3. **Bandeau logos** clients/stack (GitHub, Stripe, MTN, Orange, Wave, Zoho) en gris désaturé
-4. **Section "How it works"** en stepper horizontal numéroté (01—04) plein largeur, typo énorme, pas de cartes
-5. **Modules** présentés en **liste éditoriale** (split 50/50: titre serif + paragraphe + mini-screenshot du module, alterné gauche/droite). 9 modules = 9 sections, pas une grille
-6. **Section "Built for Africa"**: bloc texte + carte stylisée du continent avec points lumineux (Abidjan, Lagos, Dakar, Nairobi, Kinshasa)
-7. **Pricing** en tableau comparatif dense (3 colonnes, pas 3 cartes flottantes), toggle FCFA/USD discret en haut à droite du tableau
-8. **FAQ** en accordion sobre (pas de cartes, juste lignes 1px)
-9. **Footer** multi-colonnes éditorial avec gros wordmark bas, manifeste en serif italique
+- **Deploy** : ajouter onglets `Source` (file tree), `Functions` (table edge functions du déploiement), `Logs` runtime séparés du build ; bouton "Promote to production" fonctionnel sur l'historique
+- **CICD** : finir le flow Import (étape 2 framework auto-detect avec icônes Next/Vite/Astro/Remix, env vars editor key/value, étape 3 redirige vers Deploy avec build qui démarre) ; section "Deployments per branch"
+- **Builder/UIGen** : tab `Console` fonctionnel (logs preview), bouton "Open in editor" qui scroll vers Code, multi-fichiers dans le viewer, raccourci ⌘Enter pour envoyer
+- **Backend** : table editor inline edit (cellules cliquables), SQL editor avec Run + résultats en grille, RLS toggle qui ouvre drawer policies, Auth → modal config provider (client ID/secret), Storage → upload simulé + preview, Edge Functions → logs streamés en parallèle de l'éditeur
+- **Domains** : drawer DNS avec records suggérés (A, CNAME apex/www, MX Zoho, TXT verification), copy-to-clipboard, statut propagation simulée
+- **EmailSetup** : preview inbox finale avec 3 mails seed + composer minimal
+- **Monitoring** : toggle p50/p95/p99, table Top routes triable, Top errors avec stack trace expandable
+- **Billing** : flow Stripe Elements simulé complet (carte, 3DS modal, success), Invoices PDF download mocké, downgrade/upgrade plan flow
+- **Settings** : sections API Keys (générer/révoquer avec masque), Webhooks (CRUD + test ping), Team (invite par email, rôles)
 
-## 4. Refonte Auth (`Auth.tsx`)
+## 5. Connexions réelles — premières activations
 
-Layout split-screen façon Linear/Vercel: panneau gauche avec quote/manifeste serif + texture wax très subtile, panneau droit form ultra-épuré (Email → magic link / OAuth GitHub, Google, Apple), pas de carte centrée avec gradient.
+Activer **Lovable Cloud** (requis pour edge functions qui tiennent les clés OAuth/API) puis brancher progressivement.
 
-## 5. Refonte Shell Dashboard (`DashboardLayout.tsx`)
+### a. GitHub (OAuth réel)
 
-Inspiration Vercel/Linear:
-- Sidebar fine 220px, fond identique au body (pas de surface différente), items en mono 13px, regroupements `Workspace` / `Project` / `Account`, indicateur actif = barre 2px gauche en accent ocre
-- Topbar 48px: breadcrumb (Workspace / Project / Section), command palette `⌘K` au centre (Cmd+K ouvre dialog avec recherche projets/actions), à droite: status système (point vert + "All systems normal"), notifications, switch FR/EN, avatar
-- Suppression du fond étoilé global
+- Edge function `github-oauth-start` → redirige vers `github.com/login/oauth/authorize`
+- Edge function `github-oauth-callback` → échange code contre token, stocke en DB (table `connected_accounts`)
+- Edge function `github-list-repos` → appelle `api.github.com/user/repos` avec token utilisateur
+- Frontend CICD : remplace mock par appels réels, garde fallback simulé si pas connecté
+- Secrets requis : `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (utilisateur les crée sur github.com/settings/developers)
 
-## 6. Refonte Dashboard overview (`Dashboard.tsx`)
+### b. Vercel (API token utilisateur)
 
-Suppression du grid de stat cards. Nouvelle structure:
-- En-tête: "Overview" + select projet
-- **Bandeau métriques inline** (4 KPI sur une ligne séparée par filets verticaux, sans cartes): Requests, Bandwidth, Build minutes, Errors — chaque KPI = grand chiffre + sparkline 60px sous-jacente
-- **Activity feed** colonne gauche (timeline 1px, items: deploys, commits, errors, payments) — façon Vercel activity
-- **Projects table** colonne droite: liste dense (nom mono, framework badge ghost, dernier deploy relative time, statut point coloré, URL, menu `⋯`)
-- Footer section: "Usage this month" en barres horizontales fines (pas de donut)
+- Settings → "Connect Vercel" : input token ([https://vercel.com/account/tokens](https://vercel.com/account/tokens))
+- Edge functions : `vercel-list-projects`, `vercel-list-deployments`, `vercel-create-deployment` (via `api.vercel.com/v13/deployments`)
+- Deploy.tsx : si Vercel connecté pour le projet → utilise vraies données ; sinon mock
+- Secret par utilisateur stocké côté DB chiffré (pas en env global)
 
-## 7. Refonte modules (pixel-close)
+### c. Zoho Mail (API)
 
-### Deploy (`Deploy.tsx`) — Vercel-like
-Layout 3 zones type Vercel deployment detail:
-- En-tête: nom déploiement, badge statut (Ready/Building/Error), URL, commit, branche, durée, "Visit" / "..." menu
-- Tabs: **Deployment** | **Source** | **Functions** | **Logs** | **Runtime Logs**
-- Timeline build verticale gauche (Queued → Cloning → Installing → Building → Deploying → Ready) avec durées par étape
-- Logs panel droit: terminal noir pur, syntax highlighting, autoscroll, bouton "Copy" / "Download", filtres niveau
-- Sous le terminal: "Build Output" arborescence fichiers + tailles
-- Liste deployments: tableau dense (Status • URL • Source commit + author avatar • Branch • Duration • Created), pas des cartes
+- OAuth Zoho (`accounts.zoho.com/oauth/v2/auth`) — scopes `ZohoMail.organization.ALL`, `ZohoMail.accounts.ALL`
+- Edge functions : `zoho-oauth-callback`, `zoho-create-mailbox`, `zoho-list-mailboxes`, `zoho-verify-domain`
+- EmailSetup : étapes 1-3 restent guidées (DNS user-side), étape 4 crée vraiment la boîte si Zoho connecté
+- Secrets : `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`
 
-### CICD (`CICD.tsx`) — Vercel Git integration-like
-- État non connecté: grand bloc centré "Connect GitHub" → modal OAuth simulé (écran GitHub authorize fidèle: header noir GitHub, liste permissions, boutons "Authorize" vert)
-- État connecté: tableau repos avec recherche, filtre org, "Import" sur chaque ligne
-- Flow Import: étape 1 sélection repo → étape 2 configure project (root dir, framework auto-détecté avec icône, build command, output dir, env vars) → étape 3 déploiement initial qui bascule sur Deploy
-- Section "Deployments" par branche, "Production branch" sélecteur
-- Rollback: dropdown "Promote to production" sur deploy historique
+### d. Resend (le plus simple — confirmation envoi mails transactionnels)
 
-### Builder (`Builder.tsx`) — Lovable-like
-- Layout 2 colonnes: gauche = chat conversationnel (bulles user/assistant, streaming token-par-token simulé, attachments image, suggestions de prompts), bas = textarea avec attach + send
-- Droite = preview iframe simulée (sandbox URL fake) avec toggle Desktop/Tablet/Mobile, bouton refresh, bouton "Open in editor", URL bar
-- Au-dessus preview: tabs **Preview** | **Code** | **Console** (Code = arborescence fichiers + viewer monaco-like syntax)
-- Premier écran (projet vide): hero centré "What do you want to build?" + textarea prompt + 6 templates en chips (SaaS, Marketplace, Dashboard, Landing, Blog, Mobile App)
+- Connector Lovable disponible → 1 clic
+- Utilisé pour : invitations team, alertes deploy fail, notif facturation
 
-### UIGen (`UIGen.tsx`) — Lovable-like
-Variant du Builder spécialisé "section/page" — même UX chat+preview mais avec sélecteur "Generate component" / "Generate page" / "Edit existing"
+### e. Lovable AI Gateway (Builder réel)
 
-### Backend (`Backend.tsx`) — Lovable Cloud + Render
-Tabs: **Database** | **Auth** | **Storage** | **Edge Functions** | **Secrets** | **Logs**
-- Database: liste tables sidebar + table editor type Supabase (rangs éditables inline, types colonnes, RLS toggle, SQL editor en bas avec bouton Run)
-- Auth: providers list (Email, Google, GitHub, Apple, Phone) avec switches, users table
-- Storage: buckets + file browser
-- Edge Functions: liste functions + éditeur code + logs en temps réel + endpoint URL + "Deploy"
-- Secrets: key/value masqué + bouton reveal + add
-- Logs: stream type Render (filtre service, niveau, search, timestamp ms)
+- Edge function `builder-chat` → stream Gemini 2.5 Flash via `ai.gateway.lovable.dev`
+- Builder/UIGen : remplace simulation tokens par vrai stream
+- Aucun secret user-side (LOVABLE_API_KEY auto)
 
-### Domains (`Domains.tsx`)
-Style Vercel Domains: search bar large + résultats avec `.com` `.io` `.app` `.africa` `.ci` `.sn` etc., prix FCFA+USD, bouton Add. Section "Your domains" tableau (Domain • Project • Nameservers status • Expiry • Actions). Drawer config DNS (A, CNAME, MX, TXT) avec records suggérés.
+**Pas branchés cette itération** (restent simulés, marqués `Simulated` badge ghost) :
 
-### EmailSetup (`EmailSetup.tsx`)
-Wizard 4 étapes Zoho-like: 1. Domaine 2. Vérif TXT (record affiché à copier) 3. MX records 4. Création boîtes (form: nom@domaine, mot de passe, alias). Inbox preview minimaliste à la fin.
+- Stripe (à activer via `enable_stripe_payments` quand user prêt)
+- MTN/Orange/Wave/Moov (APIs partenaires nécessitent contrats commerciaux)
+- Namecheap (API key user — itération suivante)
+- Supabase direct (déjà couvert par Lovable Cloud sous le capot)
 
-### Monitoring (`Monitoring.tsx`)
-Style Vercel Analytics + Render metrics: filtres période (1h, 24h, 7d, 30d) + projet, charts (CPU, Memory, Requests, p50/p95/p99 latency, Error rate), tableau "Top routes" et "Top errors". Charts en lignes fines, axes discrets, pas de gradients massifs.
+## 6. UX connexions
 
-### Billing (`Billing.tsx`)
-- En-tête: solde wallet en grand (XOF + équivalent USD)
-- Tabs: **Overview** | **Top up** | **Transactions** | **Plans** | **Invoices**
-- Top up: choix méthode en liste (MTN MoMo, Orange Money, Wave, Moov, Carte Stripe) → flow fidèle (numéro tel + montant → écran "Vérifiez votre téléphone" + code USSD affiché + spinner attente confirmation → success). Stripe = formulaire Elements simulé.
-- Transactions: tableau dense avec icônes provider, statut, ref ID mono
-- Plans: tableau comparatif (Free / Pro / Business / Enterprise)
+- Page `Settings → Integrations` : liste des intégrations avec statut (`Connected` / `Not connected` / `Simulated`), bouton Connect/Disconnect, scopes affichés, dernier sync
+- Badge `Live` (vert) vs `Demo` (ghost) sur chaque module pour indiquer si données réelles ou mockées
+- Toast "Switched to live data" quand connexion réussit
 
-### Settings (`Settings.tsx`)
-Sidebar interne (Profile, Team, Billing, API Keys, Webhooks, Domains défaut, Preferences) + panneau form épuré.
+## 7. Détails techniques
 
-## 8. Composants nouveaux à créer
+- `connected_accounts` table : `user_id`, `provider`, `access_token` (chiffré), `refresh_token`, `expires_at`, `scopes`, `metadata jsonb`
+- Helper `useIntegration(provider)` côté front → renvoie `{ connected, data, loading, connect, disconnect }`
+- RLS : user ne voit que ses propres connexions
+- Tous les edge functions : CORS, validation Zod des inputs, gestion erreur uniforme
+- i18n : étendre pour libellés intégrations, états connexion, erreurs OAuth
 
-- `CommandPalette` (cmdk) — recherche globale ⌘K
-- `Terminal` — composant réutilisable terminal noir avec streaming + copy
-- `OAuthSimulator` — modal qui mime fidèlement écrans GitHub/Google/Apple authorize
-- `MobileMoneyDialog` — wizard paiement Mobile Money fidèle (USSD/STK push)
-- `DataTable` dense (tri, filtres, pagination, bulk actions) — utilisé partout
-- `Sparkline` léger SVG inline
-- `StatusDot` (vert/jaune/rouge/gris) + `Badge` ghost (variant `outline` discret remplace les badges colorés)
-- `EmptyState` éditorial (illustration SVG géométrique + une phrase serif)
-- `Stepper` horizontal et vertical
-- `Breadcrumb` app
+## 8. Ordre de livraison
 
-## 9. i18n
-
-Étendre `i18n.ts` pour couvrir 100% des nouveaux écrans, libellés produits (Vercel/Render/Zoho-like), états de build, erreurs.
-
-## 10. Détails techniques
-
-- Refonte `tailwind.config.ts`: nouvelles couleurs HSL, suppression gradients cosmic/aurora/nebula du theme par défaut (gardés en utilities ponctuelles), ajout `fontFamily.serif` (Fraunces), `fontFamily.mono` (Geist Mono)
-- Refonte `index.css`: nouveau set de tokens (light + dark), suppression `.glass` `.glow` `.stars-bg` du layout global, ajout utilities `.editorial-divider`, `.wax-accent` (limitées)
-- Ajout `cmdk` (command palette), `react-syntax-highlighter` pour viewer code, `monaco-editor`/`@uiw/react-codemirror` (préférence: codemirror, plus léger) pour éditeurs SQL/Edge Functions
-- Toutes les pages migrent de "grid de cards" vers tables/listes/timelines
-- Conserver `store.ts` (Zustand) — étendre avec: `currentDeployment`, `githubRepos[]`, `dbTables[]`, `edgeFunctions[]`, `transactions[]`, `domains[]` enrichis (DNS records), `mailboxes[]`
-- Données de simulation réalistes pour chaque module (repos GitHub plausibles, deployments avec vraies durées, transactions Mobile Money avec refs MTN/Orange réalistes)
-
-## 11. QA finale
-
-- Parcourir chaque écran à 1267px ET 375px
-- Vérifier contraste WCAG AA sur fond sombre
-- Vérifier que **zéro** "card avec border arrondie + gradient" ne subsiste hors landing
-- Vérifier que tous les flows interactifs vont bien jusqu'au bout (deploy → success → URL ouvrable, mobile money → confirm → wallet crédité, github → import → deploy, etc.)
+1. Fix runtime (immédiat)
+2. Polish navigation (rapide)  et ajout de plus d'animations styles dev à l'app
+3. Génération assets + index.html
+4. Complétion workflows manquants (sans backend)
+5. Activation Lovable Cloud
+6. Branchement Resend + Lovable AI (zéro friction)
+7. Branchement GitHub OAuth
+8. Branchement Vercel
+9. Branchement Zoho
 
 ## Livrable
 
-Une refonte complète en une passe: nouveau design system + nouveaux assets + landing/auth/shell/9 modules/settings refaits, workflows pixel-close, bilingue FR/EN.
+Une grosse passe couvrant 1→4 et 5→6. Les étapes 7→9 demanderont à l'utilisateur de fournir Client ID/Secret OAuth qu'il créera sur GitHub/Zoho — je préparerai l'infra et lui donnerai les URLs de callback à coller, puis brancherai dès qu'il fournit les credentials.
 
-⚠️ C'est un gros chantier (≈25-30 fichiers touchés/créés). Si une seule passe dépasse, je découperai la livraison sans rien perdre du plan.
+⚠️ Charge importante (~30 fichiers + edge functions). Si la passe sature, je découperai sans perdre le plan.
