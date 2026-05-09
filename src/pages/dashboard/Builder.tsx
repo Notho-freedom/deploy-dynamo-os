@@ -195,7 +195,7 @@ export default function Builder() {
               placeholder={lang === 'fr' ? 'Continuer la conversation…' : 'Continue the conversation…'}
               className="flex-1 bg-transparent outline-none resize-none text-[13px]"
             />
-            <button onClick={send} className="text-primary hover:opacity-80"><Send className="h-4 w-4" /></button>
+            <button onClick={send} disabled={busy || !input.trim()} className="text-primary hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"><Send className="h-4 w-4" /></button>
           </div>
         </div>
       </div>
