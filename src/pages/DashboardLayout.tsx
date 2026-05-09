@@ -80,27 +80,27 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
   return (
     <div className="min-h-screen flex w-full bg-background text-foreground">
       {/* SIDEBAR */}
-      <aside className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-border bg-background">
-        <div className="h-12 px-4 flex items-center border-b border-border">
+      <aside className="hidden md:flex w-[244px] shrink-0 flex-col border-r border-border bg-background">
+        <div className="h-14 px-5 flex items-center border-b border-border">
           <Link to="/" className="hover:opacity-80 transition"><Wordmark /></Link>
         </div>
 
         {/* project switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="mx-3 mt-3 flex items-center gap-2 px-2.5 py-2 border border-border hover:border-foreground/40 rounded-md text-left">
-              <span className="h-5 w-5 rounded gradient-cosmic bg-primary/20 border border-primary/40 flex items-center justify-center text-[10px] font-mono text-primary">
+            <button className="mx-3 mt-4 flex items-center gap-3 px-3 py-2.5 border border-border hover:border-foreground/40 rounded-md text-left transition-colors">
+              <span className="h-6 w-6 rounded gradient-cosmic bg-primary/20 border border-primary/40 flex items-center justify-center text-[10px] font-mono text-primary">
                 {project?.name[0].toUpperCase()}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-mono truncate">{project?.name}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{project?.framework}</p>
+                <p className="text-[12.5px] font-mono truncate leading-tight">{project?.name}</p>
+                <p className="text-[10.5px] text-muted-foreground truncate font-mono leading-tight mt-0.5">{project?.framework}</p>
               </div>
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">Projects</DropdownMenuLabel>
+          <DropdownMenuContent align="start" className="w-[220px]">
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Projects</DropdownMenuLabel>
             {projects.map((p) => (
               <DropdownMenuItem key={p.id} onClick={() => setProject(p)} className="font-mono text-[12px]">
                 {p.name}
@@ -113,27 +113,29 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <nav className="flex-1 overflow-y-auto py-4">
-          {groups.map((g) => (
-            <div key={g.label} className="mb-4">
-              <p className="px-5 mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">{g.label}</p>
-              <ul>
+        <nav className="flex-1 overflow-y-auto py-5">
+          {groups.map((g, gi) => (
+            <div key={g.label} className={cn(gi > 0 && 'mt-7')}>
+              <p className="px-6 mb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-mono">{g.label}</p>
+              <ul className="space-y-0.5">
                 {g.items.map((it) => (
-                  <li key={it.to} className="relative">
+                  <li key={it.to} className="relative px-3">
                     <NavLink
                       to={it.to}
                       end={it.end}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center gap-2.5 pl-5 pr-4 py-1.5 text-[12.5px] font-mono transition',
-                          isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                          'group flex items-center gap-3 px-3 py-2 text-[13px] font-mono rounded-md transition-colors',
+                          isActive
+                            ? 'text-foreground bg-muted/40'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/20',
                         )
                       }
                     >
                       {({ isActive }) => (
                         <>
-                          {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-primary" />}
-                          <it.icon className="h-3.5 w-3.5 shrink-0" />
+                          {isActive && <span className="absolute -left-px top-2 bottom-2 w-[2px] bg-primary rounded-r" />}
+                          <it.icon className={cn('h-3.5 w-3.5 shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground/70 group-hover:text-foreground')} />
                           <span className="truncate">{it.label}</span>
                         </>
                       )}
