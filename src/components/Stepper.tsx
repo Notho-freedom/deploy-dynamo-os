@@ -18,10 +18,11 @@ export function Stepper({
   className?: string;
   orientation?: 'vertical' | 'horizontal';
 }) {
+  const safeSteps = (steps ?? []).filter(Boolean) as Step[];
   if (orientation === 'horizontal') {
     return (
       <ol className={cn('flex items-center w-full gap-0', className)}>
-        {steps.map((s, i) => {
+        {safeSteps.map((s, i) => {
           const done = i < current;
           const active = i === current;
           return (
