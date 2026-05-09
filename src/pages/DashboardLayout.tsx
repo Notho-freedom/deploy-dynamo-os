@@ -156,7 +156,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* TOPBAR */}
-        <header className="h-12 flex items-center px-4 gap-4 border-b border-border bg-background sticky top-0 z-30">
+        <header className="h-14 flex items-center px-5 gap-5 border-b border-border bg-background sticky top-0 z-30">
           <div className="flex items-center gap-2 text-[12px] font-mono text-muted-foreground min-w-0">
             <span className="hidden sm:inline">akua</span>
             <span className="hidden sm:inline">/</span>
