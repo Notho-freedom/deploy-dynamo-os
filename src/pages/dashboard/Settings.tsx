@@ -6,7 +6,21 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Eye, EyeOff, Plus } from 'lucide-react';
 
-const sections = ['profile', 'team', 'api', 'webhooks', 'preferences'] as const;
+const sections = ['profile', 'team', 'integrations', 'api', 'webhooks', 'preferences'] as const;
+
+const integrations = [
+  { id: 'lovable-ai', name: 'Lovable AI', desc: 'Streaming Gemini & GPT models for the Builder', status: 'live', cat: 'AI' },
+  { id: 'resend', name: 'Resend', desc: 'Transactional email (invites, alerts, receipts)', status: 'live', cat: 'Email' },
+  { id: 'github', name: 'GitHub', desc: 'OAuth for repository import & CI/CD', status: 'demo', cat: 'Source' },
+  { id: 'vercel', name: 'Vercel', desc: 'Deploy via API token (live deployments & logs)', status: 'demo', cat: 'Hosting' },
+  { id: 'zoho', name: 'Zoho Mail', desc: 'Provision mailboxes on your domain', status: 'demo', cat: 'Email' },
+  { id: 'stripe', name: 'Stripe', desc: 'International cards & subscriptions', status: 'demo', cat: 'Payments' },
+  { id: 'mtn', name: 'MTN MoMo', desc: 'Mobile Money collections (XOF / GHS)', status: 'demo', cat: 'Payments' },
+  { id: 'orange', name: 'Orange Money', desc: 'Mobile Money — Côte d\'Ivoire, Sénégal, Mali', status: 'demo', cat: 'Payments' },
+  { id: 'wave', name: 'Wave', desc: 'Wave Senegal & Côte d\'Ivoire payments', status: 'demo', cat: 'Payments' },
+  { id: 'namecheap', name: 'Namecheap', desc: 'Domain registration & DNS', status: 'demo', cat: 'Domains' },
+] as const;
+
 
 export default function Settings() {
   const { lang } = useI18n();
