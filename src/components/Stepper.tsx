@@ -40,7 +40,7 @@ export function Stepper({
                 </span>
                 <span className={cn('text-sm truncate', active ? 'text-foreground' : 'text-muted-foreground')}>{s.label}</span>
               </div>
-              {i < steps.length - 1 && <div className="flex-1 h-px bg-border mx-3" />}
+              {i < safeSteps.length - 1 && <div className="flex-1 h-px bg-border mx-3" />}
             </li>
           );
         })}
@@ -50,7 +50,7 @@ export function Stepper({
 
   return (
     <ol className={cn('relative space-y-5', className)}>
-      {steps.map((s, i) => {
+      {safeSteps.map((s, i) => {
         const done = i < current;
         const active = i === current;
         return (
