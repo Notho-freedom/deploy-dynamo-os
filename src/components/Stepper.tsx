@@ -66,7 +66,7 @@ export function Stepper({
               >
                 {done ? <Check className="h-3 w-3" /> : String(i + 1).padStart(2, '0')}
               </span>
-              {i < steps.length - 1 && <span className="w-px flex-1 bg-border mt-1" />}
+              {i < safeSteps.length - 1 && <span className="w-px flex-1 bg-border mt-1" />}
             </div>
             <div className="pb-2 -mt-0.5 min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
