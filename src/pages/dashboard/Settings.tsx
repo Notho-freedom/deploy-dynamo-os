@@ -6,7 +6,21 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Eye, EyeOff, Plus } from 'lucide-react';
 
-const sections = ['profile', 'team', 'api', 'webhooks', 'preferences'] as const;
+const sections = ['profile', 'team', 'integrations', 'api', 'webhooks', 'preferences'] as const;
+
+const integrations = [
+  { id: 'lovable-ai', name: 'Lovable AI', desc: 'Streaming Gemini & GPT models for the Builder', status: 'live', cat: 'AI' },
+  { id: 'resend', name: 'Resend', desc: 'Transactional email (invites, alerts, receipts)', status: 'live', cat: 'Email' },
+  { id: 'github', name: 'GitHub', desc: 'OAuth for repository import & CI/CD', status: 'demo', cat: 'Source' },
+  { id: 'vercel', name: 'Vercel', desc: 'Deploy via API token (live deployments & logs)', status: 'demo', cat: 'Hosting' },
+  { id: 'zoho', name: 'Zoho Mail', desc: 'Provision mailboxes on your domain', status: 'demo', cat: 'Email' },
+  { id: 'stripe', name: 'Stripe', desc: 'International cards & subscriptions', status: 'demo', cat: 'Payments' },
+  { id: 'mtn', name: 'MTN MoMo', desc: 'Mobile Money collections (XOF / GHS)', status: 'demo', cat: 'Payments' },
+  { id: 'orange', name: 'Orange Money', desc: 'Mobile Money — Côte d\'Ivoire, Sénégal, Mali', status: 'demo', cat: 'Payments' },
+  { id: 'wave', name: 'Wave', desc: 'Wave Senegal & Côte d\'Ivoire payments', status: 'demo', cat: 'Payments' },
+  { id: 'namecheap', name: 'Namecheap', desc: 'Domain registration & DNS', status: 'demo', cat: 'Domains' },
+] as const;
+
 
 export default function Settings() {
   const { lang } = useI18n();
@@ -59,6 +73,36 @@ export default function Settings() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {tab === 'integrations' && (
+          <div className="space-y-5">
+            <div>
+              <h2 className="font-editorial text-2xl">Integrations</h2>
+              <p className="text-[13px] text-muted-foreground mt-1">{lang === 'fr' ? 'Connectez NebulaOS à vos outils. Live = données réelles. Demo = flow simulé.' : 'Connect NebulaOS to your tools. Live = real data. Demo = simulated flow.'}</p>
+            </div>
+            <div className="border border-border divide-y divide-border">
+              {integrations.map((it) => (
+                <div key={it.id} className="px-4 py-3.5 flex items-center gap-4 text-[13px]">
+                  <span className="h-8 w-8 rounded border border-border flex items-center justify-center text-[11px] font-mono text-muted-foreground shrink-0">{it.name[0]}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium truncate">{it.name}</p>
+                      <span className={`text-[10px] uppercase tracking-widest font-mono px-1.5 py-0.5 rounded ${it.status === 'live' ? 'bg-success/15 text-success border border-success/30' : 'border border-border text-muted-foreground'}`}>{it.status}</span>
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">{it.cat}</span>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground truncate mt-0.5">{it.desc}</p>
+                  </div>
+                  {it.status === 'live' ? (
+                    <Button variant="outline" size="sm" disabled>{lang === 'fr' ? 'Connecté' : 'Connected'}</Button>
+                  ) : (
+                    <Button variant="outline" size="sm">{lang === 'fr' ? 'Connecter' : 'Connect'}</Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground font-mono">{lang === 'fr' ? 'GitHub · Vercel · Zoho seront branchés dès que vous fournirez les credentials OAuth.' : 'GitHub · Vercel · Zoho will go live once you provide OAuth credentials.'}</p>
           </div>
         )}
 

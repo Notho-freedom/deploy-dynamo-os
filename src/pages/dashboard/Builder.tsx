@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
 import { useApp } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Send, Paperclip, Monitor, Smartphone, Tablet as TabletIcon, RefreshCw, Code2, Eye, Terminal as TerminalIcon } from 'lucide-react';
+import { Sparkles, Send, Paperclip, Monitor, Smartphone, Tablet as TabletIcon, RefreshCw, Code2, Eye, Terminal as TerminalIcon, Zap } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const templates = [
   { name: 'SaaS Dashboard', prompt: 'A modern SaaS dashboard with auth, billing, and analytics' },
@@ -24,6 +26,7 @@ export default function Builder() {
   const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [view, setView] = useState<'preview' | 'code' | 'console'>('preview');
   const [files, setFiles] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,57 +34,90 @@ export default function Builder() {
   }, [messages]);
 
   const begin = (prompt: string) => {
+    if (!prompt.trim()) return;
     setStarted(true);
     setMessages([{ role: 'user', text: prompt }]);
-    streamReply(prompt);
+    streamReply(prompt, [{ role: 'user', content: prompt }]);
     addProject({ name: 'new-project-' + Math.random().toString(36).slice(2, 5), framework: 'nextjs', template: 'ai', status: 'building' });
-  };
-
-  const send = () => {
-    if (!input.trim()) return;
-    setMessages((m) => [...m, { role: 'user', text: input }]);
-    streamReply(input);
     setInput('');
   };
 
-  const streamReply = (prompt: string) => {
-    const reply = lang === 'fr'
-      ? `Bien reçu. Je scaffold un projet Next.js 14 avec Postgres, auth GitHub et Mobile Money. Je crée la structure :
+  const send = () => {
+    if (!input.trim() || busy) return;
+    const next: Msg = { role: 'user', text: input };
+    setMessages((m) => [...m, next]);
+    const history = [...messages, next].map((m) => ({ role: m.role, content: m.text }));
+    streamReply(input, history);
+    setInput('');
+  };
 
-› app/(marketing)/page.tsx
-› app/dashboard/layout.tsx
-› app/api/momo/route.ts
-› lib/db/schema.ts
-› components/ui/*
-
-Build initial en cours…`
-      : `Got it. Scaffolding a Next.js 14 project with Postgres, GitHub auth and Mobile Money. Creating structure:
-
-› app/(marketing)/page.tsx
-› app/dashboard/layout.tsx
-› app/api/momo/route.ts
-› lib/db/schema.ts
-› components/ui/*
-
-Initial build in progress…`;
+  const streamReply = async (prompt: string, history: Array<{ role: 'user' | 'assistant'; content: string }>) => {
+    setBusy(true);
     setMessages((m) => [...m, { role: 'assistant', text: '', streaming: true }]);
-    let i = 0;
-    const id = setInterval(() => {
-      i += 4 + Math.random() * 6;
+
+    const projectRef = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID;
+    const url = `https://${projectRef}.supabase.co/functions/v1/builder-chat`;
+    const anon = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
+        body: JSON.stringify({ messages: history }),
+      });
+
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: 'Network error' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let acc = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line.startsWith('data:')) continue;
+          const data = line.slice(5).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data);
+            const delta: string | undefined = json?.choices?.[0]?.delta?.content;
+            if (delta) {
+              acc += delta;
+              setMessages((m) => {
+                const last = m[m.length - 1];
+                if (!last || last.role !== 'assistant') return m;
+                return [...m.slice(0, -1), { ...last, text: acc }];
+              });
+            }
+          } catch { /* ignore parse errors on partial chunks */ }
+        }
+      }
+
       setMessages((m) => {
         const last = m[m.length - 1];
-        if (!last || last.role !== 'assistant') return m;
-        return [...m.slice(0, -1), { ...last, text: reply.slice(0, Math.floor(i)) }];
+        if (!last) return m;
+        return [...m.slice(0, -1), { ...last, streaming: false }];
       });
-      if (i >= reply.length) {
-        clearInterval(id);
-        setMessages((m) => {
-          const last = m[m.length - 1];
-          return [...m.slice(0, -1), { ...last, streaming: false }];
-        });
-        setFiles((f) => [...f, 'app/(marketing)/page.tsx', 'app/api/momo/route.ts', 'lib/db/schema.ts']);
-      }
-    }, 28);
+      setFiles((f) => Array.from(new Set([...f, 'app/(marketing)/page.tsx', 'app/api/momo/route.ts', 'lib/db/schema.ts'])));
+    } catch (e: any) {
+      const errMsg = e?.message || 'unknown';
+      toast.error(lang === 'fr' ? `Erreur IA : ${errMsg}` : `AI error: ${errMsg}`);
+      setMessages((m) => {
+        const last = m[m.length - 1];
+        if (!last) return m;
+        return [...m.slice(0, -1), { ...last, streaming: false, text: last.text || (lang === 'fr' ? '_(la génération a échoué — réessayez dans un instant.)_' : '_(generation failed — try again in a moment.)_') }];
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!started) {
@@ -133,7 +169,10 @@ Initial build in progress…`;
         <div className="px-5 py-3 border-b border-border flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="text-[12px] font-mono">conversation</span>
-          <span className="ml-auto text-[11px] text-muted-foreground font-mono">gpt-5 · streaming</span>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+            <Zap className="h-3 w-3 text-success" />
+            gemini-2.5-flash · live
+          </span>
         </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
           {messages.map((m, i) => (
@@ -156,7 +195,7 @@ Initial build in progress…`;
               placeholder={lang === 'fr' ? 'Continuer la conversation…' : 'Continue the conversation…'}
               className="flex-1 bg-transparent outline-none resize-none text-[13px]"
             />
-            <button onClick={send} className="text-primary hover:opacity-80"><Send className="h-4 w-4" /></button>
+            <button onClick={send} disabled={busy || !input.trim()} className="text-primary hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"><Send className="h-4 w-4" /></button>
           </div>
         </div>
       </div>
