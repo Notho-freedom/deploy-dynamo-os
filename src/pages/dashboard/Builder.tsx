@@ -169,7 +169,10 @@ export default function Builder() {
         <div className="px-5 py-3 border-b border-border flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span className="text-[12px] font-mono">conversation</span>
-          <span className="ml-auto text-[11px] text-muted-foreground font-mono">gpt-5 · streaming</span>
+          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+            <Zap className="h-3 w-3 text-success" />
+            gemini-2.5-flash · live
+          </span>
         </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
           {messages.map((m, i) => (
