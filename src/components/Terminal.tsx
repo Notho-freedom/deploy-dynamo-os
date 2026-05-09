@@ -33,6 +33,8 @@ export function Terminal({
     setTimeout(() => setCopied(false), 1200);
   };
 
+  const safe = (lines ?? []).filter(Boolean) as TerminalLine[];
+
   return (
     <div className={cn('border border-border bg-[#0b0b0d] overflow-hidden', className)}>
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-black/40">
@@ -51,7 +53,7 @@ export function Terminal({
         </button>
       </div>
       <div ref={ref} className={cn('font-mono text-[12.5px] leading-relaxed p-4 overflow-auto', height)}>
-        {lines.map((l, i) => (
+        {safe.map((l, i) => (
           <div
             key={i}
             className={cn(
