@@ -188,14 +188,14 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="h-7 w-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-mono text-[11px] text-primary">
-                {user.name[0]?.toUpperCase()}
+              <button className="h-7 w-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-mono text-[11px] text-primary overflow-hidden">
+                {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayName[0]?.toUpperCase()}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
-                <p className="font-medium text-[13px]">{user.name}</p>
-                <p className="text-[11px] text-muted-foreground font-normal font-mono">{user.email}</p>
+                <p className="font-medium text-[13px]">{displayName}</p>
+                <p className="text-[11px] text-muted-foreground font-normal font-mono">{userEmail}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
@@ -205,7 +205,7 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
                 <Wallet className="h-3.5 w-3.5 mr-2" /> Billing
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { logout(); navigate('/'); }}>
+              <DropdownMenuItem onClick={async () => { await signOut(); storeLogout(); navigate('/'); }}>
                 <LogOut className="h-3.5 w-3.5 mr-2" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
