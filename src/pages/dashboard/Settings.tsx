@@ -1,34 +1,104 @@
 import { useState } from 'react';
-import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
+import { useIntegration, Provider } from '@/hooks/useIntegration';
 import { useI18n } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Plus } from 'lucide-react';
+import { Eye, EyeOff, Plus, Triangle, Github, Mail, Globe, CreditCard } from 'lucide-react';
+import { VercelConnectDialog } from '@/components/VercelConnectDialog';
+import { toast } from 'sonner';
 
 const sections = ['profile', 'team', 'integrations', 'api', 'webhooks', 'preferences'] as const;
 
-const integrations = [
-  { id: 'lovable-ai', name: 'Lovable AI', desc: 'Streaming Gemini & GPT models for the Builder', status: 'live', cat: 'AI' },
-  { id: 'resend', name: 'Resend', desc: 'Transactional email (invites, alerts, receipts)', status: 'live', cat: 'Email' },
-  { id: 'github', name: 'GitHub', desc: 'OAuth for repository import & CI/CD', status: 'demo', cat: 'Source' },
-  { id: 'vercel', name: 'Vercel', desc: 'Deploy via API token (live deployments & logs)', status: 'demo', cat: 'Hosting' },
-  { id: 'zoho', name: 'Zoho Mail', desc: 'Provision mailboxes on your domain', status: 'demo', cat: 'Email' },
-  { id: 'stripe', name: 'Stripe', desc: 'International cards & subscriptions', status: 'demo', cat: 'Payments' },
-  { id: 'mtn', name: 'MTN MoMo', desc: 'Mobile Money collections (XOF / GHS)', status: 'demo', cat: 'Payments' },
-  { id: 'orange', name: 'Orange Money', desc: 'Mobile Money — Côte d\'Ivoire, Sénégal, Mali', status: 'demo', cat: 'Payments' },
-  { id: 'wave', name: 'Wave', desc: 'Wave Senegal & Côte d\'Ivoire payments', status: 'demo', cat: 'Payments' },
-  { id: 'namecheap', name: 'Namecheap', desc: 'Domain registration & DNS', status: 'demo', cat: 'Domains' },
-] as const;
+type IntegrationDef = {
+  id: string;
+  provider?: Provider;
+  name: string;
+  desc: string;
+  cat: string;
+  icon: any;
+  // 'managed' = lovable cloud built-in; 'oauth' = needs user creds
+  kind: 'managed' | 'token' | 'oauth' | 'soon';
+};
 
+const INTEGRATIONS: IntegrationDef[] = [
+  { id: 'lovable-ai', name: 'Lovable AI', desc: 'Streaming Gemini & GPT models for the Builder', cat: 'AI', icon: () => <span>✨</span>, kind: 'managed' },
+  { id: 'resend', name: 'Resend', desc: 'Transactional email (invites, alerts, receipts)', cat: 'Email', icon: Mail, kind: 'managed' },
+  { id: 'auth-google', name: 'Google Sign-in', desc: 'Social login enabled on /auth', cat: 'Auth', icon: () => <span>G</span>, kind: 'managed' },
+  { id: 'vercel', provider: 'vercel', name: 'Vercel', desc: 'Deploy via Personal Access Token', cat: 'Hosting', icon: Triangle, kind: 'token' },
+  { id: 'github', provider: 'github', name: 'GitHub', desc: 'OAuth for repository import & CI/CD', cat: 'Source', icon: Github, kind: 'oauth' },
+  { id: 'zoho', provider: 'zoho', name: 'Zoho Mail', desc: 'Provision mailboxes on your domain', cat: 'Email', icon: Mail, kind: 'oauth' },
+  { id: 'porkbun', provider: 'porkbun', name: 'Porkbun', desc: 'Domain registration & DNS (low fees, global TLDs)', cat: 'Domains', icon: Globe, kind: 'oauth' },
+  { id: 'cloudflare', provider: 'cloudflare', name: 'Cloudflare', desc: 'Domains at cost + edge DNS', cat: 'Domains', icon: Globe, kind: 'oauth' },
+  { id: 'stripe', name: 'Stripe', desc: 'International cards & subscriptions', cat: 'Payments', icon: CreditCard, kind: 'soon' },
+  { id: 'mtn', name: 'MTN MoMo', desc: 'Mobile Money (XOF / GHS) — via aggregator', cat: 'Payments', icon: CreditCard, kind: 'soon' },
+  { id: 'orange', name: 'Orange Money', desc: 'CIV, SEN, MLI — via aggregator', cat: 'Payments', icon: CreditCard, kind: 'soon' },
+];
+
+function StatusBadge({ live }: { live: boolean | 'soon' }) {
+  if (live === 'soon') return <span className="text-[10px] uppercase tracking-widest font-mono px-1.5 py-0.5 rounded border border-border text-muted-foreground">Soon</span>;
+  if (live) return <span className="text-[10px] uppercase tracking-widest font-mono px-1.5 py-0.5 rounded bg-success/15 text-success border border-success/30">Live</span>;
+  return <span className="text-[10px] uppercase tracking-widest font-mono px-1.5 py-0.5 rounded border border-border text-muted-foreground">Demo</span>;
+}
+
+function IntegrationRow({ def, lang }: { def: IntegrationDef; lang: 'fr' | 'en' }) {
+  const intg = useIntegration((def.provider ?? 'vercel') as Provider);
+  const [openVercel, setOpenVercel] = useState(false);
+
+  const isManaged = def.kind === 'managed';
+  const isSoon = def.kind === 'soon';
+  const connected = !!def.provider && intg.connected;
+  const live: boolean | 'soon' = isSoon ? 'soon' : isManaged || connected;
+
+  const handleConnect = () => {
+    if (def.provider === 'vercel') setOpenVercel(true);
+    else toast.info(`${def.name} OAuth bientôt — credentials provider requis`);
+  };
+
+  return (
+    <>
+      <div className="px-4 py-3.5 flex items-center gap-4 text-[13px]">
+        <span className="h-8 w-8 rounded border border-border flex items-center justify-center text-[11px] font-mono text-muted-foreground shrink-0">
+          <def.icon className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-medium truncate">{def.name}</p>
+            <StatusBadge live={live} />
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">{def.cat}</span>
+          </div>
+          <p className="text-[12px] text-muted-foreground truncate mt-0.5">
+            {connected && intg.connection?.metadata?.username ? `Connected as ${intg.connection.metadata.username}` : def.desc}
+          </p>
+        </div>
+        {isManaged ? (
+          <Button variant="outline" size="sm" disabled>{lang === 'fr' ? 'Géré' : 'Managed'}</Button>
+        ) : isSoon ? (
+          <Button variant="outline" size="sm" disabled>Soon</Button>
+        ) : connected ? (
+          <Button variant="outline" size="sm" onClick={async () => { await intg.disconnect(); toast.success('Disconnected'); }}>
+            {lang === 'fr' ? 'Déconnecter' : 'Disconnect'}
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={handleConnect}>{lang === 'fr' ? 'Connecter' : 'Connect'}</Button>
+        )}
+      </div>
+      {def.provider === 'vercel' && (
+        <VercelConnectDialog open={openVercel} onOpenChange={setOpenVercel} onConnected={intg.refresh} />
+      )}
+    </>
+  );
+}
 
 export default function Settings() {
   const { lang } = useI18n();
-  const user = useApp((s) => s.user);
+  const { user, profile } = useAuth();
   const [tab, setTab] = useState<typeof sections[number]>('profile');
   const [reveal, setReveal] = useState<string | null>(null);
 
   if (!user) return null;
+  const displayName = profile?.display_name || user.email?.split('@')[0] || '';
 
   return (
     <div className="grid grid-cols-12 gap-8">
@@ -47,9 +117,9 @@ export default function Settings() {
         {tab === 'profile' && (
           <div className="space-y-5 max-w-lg">
             <h2 className="font-editorial text-2xl">Profile</h2>
-            <Field label="Full name"><Input defaultValue={user.name} /></Field>
-            <Field label="Email"><Input defaultValue={user.email} type="email" className="font-mono" /></Field>
-            <Field label="Display handle"><Input defaultValue={user.email.split('@')[0]} className="font-mono" /></Field>
+            <Field label="Full name"><Input defaultValue={displayName} /></Field>
+            <Field label="Email"><Input defaultValue={user.email || ''} type="email" className="font-mono" disabled /></Field>
+            <Field label="Plan"><Input defaultValue={profile?.plan || 'free'} className="font-mono" disabled /></Field>
             <Button>{lang === 'fr' ? 'Enregistrer' : 'Save changes'}</Button>
           </div>
         )}
@@ -62,12 +132,10 @@ export default function Settings() {
             </div>
             <div className="border border-border">
               {[
-                { name: 'Akua Mensah', email: 'akua@nebulaos.app', role: 'Owner' },
-                { name: 'Tunde Olu', email: 'tunde@nebulaos.app', role: 'Admin' },
-                { name: 'Mariama Diop', email: 'mariama@nebulaos.app', role: 'Member' },
+                { name: displayName, email: user.email || '', role: 'Owner' },
               ].map((m) => (
                 <div key={m.email} className="px-4 py-3 border-b border-border last:border-0 flex items-center gap-3 text-[13px]">
-                  <span className="h-7 w-7 rounded-full bg-primary/20 border border-primary/40 text-primary flex items-center justify-center text-[11px] font-mono">{m.name[0]}</span>
+                  <span className="h-7 w-7 rounded-full bg-primary/20 border border-primary/40 text-primary flex items-center justify-center text-[11px] font-mono">{m.name[0]?.toUpperCase()}</span>
                   <div className="min-w-0"><p className="truncate">{m.name}</p><p className="text-[11px] text-muted-foreground font-mono truncate">{m.email}</p></div>
                   <span className="ml-auto text-[11px] uppercase tracking-wide text-muted-foreground">{m.role}</span>
                 </div>
@@ -80,29 +148,11 @@ export default function Settings() {
           <div className="space-y-5">
             <div>
               <h2 className="font-editorial text-2xl">Integrations</h2>
-              <p className="text-[13px] text-muted-foreground mt-1">{lang === 'fr' ? 'Connectez NebulaOS à vos outils. Live = données réelles. Demo = flow simulé.' : 'Connect NebulaOS to your tools. Live = real data. Demo = simulated flow.'}</p>
+              <p className="text-[13px] text-muted-foreground mt-1">{lang === 'fr' ? 'Live = données réelles. Managed = activé par défaut. Soon = via agrégateur, à venir.' : 'Live = real data. Managed = enabled by default. Soon = via aggregator, coming.'}</p>
             </div>
             <div className="border border-border divide-y divide-border">
-              {integrations.map((it) => (
-                <div key={it.id} className="px-4 py-3.5 flex items-center gap-4 text-[13px]">
-                  <span className="h-8 w-8 rounded border border-border flex items-center justify-center text-[11px] font-mono text-muted-foreground shrink-0">{it.name[0]}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium truncate">{it.name}</p>
-                      <span className={`text-[10px] uppercase tracking-widest font-mono px-1.5 py-0.5 rounded ${it.status === 'live' ? 'bg-success/15 text-success border border-success/30' : 'border border-border text-muted-foreground'}`}>{it.status}</span>
-                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">{it.cat}</span>
-                    </div>
-                    <p className="text-[12px] text-muted-foreground truncate mt-0.5">{it.desc}</p>
-                  </div>
-                  {it.status === 'live' ? (
-                    <Button variant="outline" size="sm" disabled>{lang === 'fr' ? 'Connecté' : 'Connected'}</Button>
-                  ) : (
-                    <Button variant="outline" size="sm">{lang === 'fr' ? 'Connecter' : 'Connect'}</Button>
-                  )}
-                </div>
-              ))}
+              {INTEGRATIONS.map((it) => <IntegrationRow key={it.id} def={it} lang={lang} />)}
             </div>
-            <p className="text-[11px] text-muted-foreground font-mono">{lang === 'fr' ? 'GitHub · Vercel · Zoho seront branchés dès que vous fournirez les credentials OAuth.' : 'GitHub · Vercel · Zoho will go live once you provide OAuth credentials.'}</p>
           </div>
         )}
 
