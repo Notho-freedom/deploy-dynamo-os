@@ -78,6 +78,13 @@ export default function Deploy() {
         </Button>
       </div>
 
+      {/* Live Vercel data (real API) */}
+      <section>
+        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3 font-mono">Live · Vercel</p>
+        <VercelLivePanel />
+      </section>
+
+
       {/* Project selector ribbon */}
       <div className="border-y border-border flex divide-x divide-border overflow-x-auto">
         {projects.map((p) => (
