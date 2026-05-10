@@ -1,44 +1,85 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable';
 import { useApp } from '@/lib/store';
 import { useT, useI18n } from '@/lib/i18n';
 import { Wordmark } from '@/components/Logo';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Github, ArrowRight, Mail } from 'lucide-react';
+import { ArrowRight, Mail, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import heroImg from '@/assets/hero.jpg';
 
+const credSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(8).max(72),
+  name: z.string().trim().min(1).max(100).optional(),
+});
+
 export default function Auth() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
   const login = useApp((s) => s.login);
   const navigate = useNavigate();
   const t = useT();
   const { lang } = useI18n();
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-    setSent(true);
-    setTimeout(() => {
+    if (mode === 'forgot') {
+      if (!email) return;
+      setBusy(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      setBusy(false);
+      if (error) toast.error(error.message);
+      else toast.success(lang === 'fr' ? 'Email de réinitialisation envoyé' : 'Reset email sent');
+      return;
+    }
+
+    const parsed = credSchema.safeParse({ email, password, name: mode === 'signup' ? name : undefined });
+    if (!parsed.success) { toast.error(parsed.error.errors[0].message); return; }
+
+    setBusy(true);
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: { name },
+        },
+      });
+      if (error) { setBusy(false); toast.error(error.message); return; }
       login(email);
       navigate('/dashboard');
-    }, 900);
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) { setBusy(false); toast.error(error.message); return; }
+      login(email);
+      navigate('/dashboard');
+    }
+    setBusy(false);
   };
 
-  const oauth = (provider: string) => {
-    setSent(true);
-    setTimeout(() => {
-      login(`${provider}-user@nebulaos.app`);
-      navigate('/dashboard');
-    }, 700);
+  const google = async () => {
+    setBusy(true);
+    const result = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: `${window.location.origin}/dashboard`,
+    });
+    if (result.error) { setBusy(false); toast.error('Google sign-in failed'); return; }
+    if (result.redirected) return;
+    navigate('/dashboard');
   };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
-      {/* Editorial left panel */}
       <div className="relative hidden lg:flex flex-col justify-between p-10 border-r border-border overflow-hidden">
         <div className="absolute inset-0 wax-accent opacity-60 -z-10" />
         <Link to="/"><Wordmark /></Link>
@@ -54,55 +95,59 @@ export default function Auth() {
         <div className="bogolan-stripe h-1 opacity-40" />
       </div>
 
-      {/* Form panel */}
       <div className="flex flex-col items-center justify-center p-6 lg:p-12 relative">
         <Link to="/" className="lg:hidden absolute top-6 left-6"><Wordmark /></Link>
         <div className="w-full max-w-sm">
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">
-            {mode === 'signin' ? (lang === 'fr' ? 'Connexion' : 'Sign in') : (lang === 'fr' ? 'Inscription' : 'Create account')}
+            {mode === 'signin' ? (lang === 'fr' ? 'Connexion' : 'Sign in') : mode === 'signup' ? (lang === 'fr' ? 'Inscription' : 'Create account') : (lang === 'fr' ? 'Mot de passe oublié' : 'Forgot password')}
           </p>
           <h1 className="font-editorial text-4xl mb-2">
-            {mode === 'signin' ? t.auth.welcome : t.auth.welcomeNew}
+            {mode === 'signin' ? t.auth.welcome : mode === 'signup' ? t.auth.welcomeNew : (lang === 'fr' ? 'Réinitialiser' : 'Reset')}
           </h1>
           <p className="text-[13px] text-muted-foreground mb-8">
-            {mode === 'signin' ? t.auth.subtitle : t.auth.subtitleNew}
+            {mode === 'signin' ? t.auth.subtitle : mode === 'signup' ? t.auth.subtitleNew : (lang === 'fr' ? 'Entrez votre email pour recevoir un lien.' : 'Enter your email to get a reset link.')}
           </p>
 
-          <div className="space-y-2">
-            <button onClick={() => oauth('github')} className="w-full flex items-center justify-center gap-2 border border-border hover:border-foreground rounded-md px-3 py-2.5 text-[13px] transition">
-              <Github className="h-4 w-4" /> {lang === 'fr' ? 'Continuer avec GitHub' : 'Continue with GitHub'}
-            </button>
-            <button onClick={() => oauth('google')} className="w-full flex items-center justify-center gap-2 border border-border hover:border-foreground rounded-md px-3 py-2.5 text-[13px] transition">
-              <GoogleIcon /> {lang === 'fr' ? 'Continuer avec Google' : 'Continue with Google'}
-            </button>
-          </div>
-
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-widest text-muted-foreground">
-            <span className="flex-1 h-px bg-border" />
-            <span>{lang === 'fr' ? 'ou' : 'or'}</span>
-            <span className="flex-1 h-px bg-border" />
-          </div>
+          {mode !== 'forgot' && (
+            <>
+              <button onClick={google} disabled={busy} className="w-full flex items-center justify-center gap-2 border border-border hover:border-foreground rounded-md px-3 py-2.5 text-[13px] transition disabled:opacity-50">
+                <GoogleIcon /> {lang === 'fr' ? 'Continuer avec Google' : 'Continue with Google'}
+              </button>
+              <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-widest text-muted-foreground">
+                <span className="flex-1 h-px bg-border" />
+                <span>{lang === 'fr' ? 'ou' : 'or'}</span>
+                <span className="flex-1 h-px bg-border" />
+              </div>
+            </>
+          )}
 
           <form onSubmit={submit} className="space-y-3">
             {mode === 'signup' && (
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.auth.name} className="h-10" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.auth.name} className="h-10" maxLength={100} />
             )}
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.auth.email} required className="h-10 font-mono text-[13px]" />
-            <Button type="submit" disabled={sent} className="w-full h-10 group">
-              {sent
-                ? (lang === 'fr' ? 'Lien envoyé…' : 'Link sent…')
-                : (
-                  <>
-                    <Mail className="h-4 w-4" /> {lang === 'fr' ? 'Recevoir un lien magique' : 'Send magic link'}
-                  </>
-                )}
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t.auth.email} required className="h-10 font-mono text-[13px]" maxLength={255} />
+            {mode !== 'forgot' && (
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={lang === 'fr' ? 'Mot de passe (8+ caractères)' : 'Password (8+ chars)'} required minLength={8} maxLength={72} className="h-10 font-mono text-[13px]" />
+            )}
+            <Button type="submit" disabled={busy} className="w-full h-10">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                mode === 'signin' ? <>{lang === 'fr' ? 'Se connecter' : 'Sign in'} <ArrowRight className="h-4 w-4" /></> :
+                mode === 'signup' ? <>{lang === 'fr' ? 'Créer le compte' : 'Create account'} <ArrowRight className="h-4 w-4" /></> :
+                <><Mail className="h-4 w-4" /> {lang === 'fr' ? 'Envoyer le lien' : 'Send link'}</>
+              )}
             </Button>
           </form>
 
+          {mode === 'signin' && (
+            <button onClick={() => setMode('forgot')} className="text-[11px] text-muted-foreground hover:text-foreground mt-3 transition">
+              {lang === 'fr' ? 'Mot de passe oublié ?' : 'Forgot password?'}
+            </button>
+          )}
+
           <p className="text-[12px] text-muted-foreground mt-8 text-center">
-            {mode === 'signin' ? t.auth.noAccount : t.auth.hasAccount}{' '}
+            {mode === 'signin' ? t.auth.noAccount : mode === 'signup' ? t.auth.hasAccount : (lang === 'fr' ? 'Retour à' : 'Back to')}{' '}
             <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="text-foreground hover:text-primary border-b border-foreground/30 hover:border-primary transition">
-              {mode === 'signin' ? t.auth.createOne : t.auth.loginNow}
+              {mode === 'signin' ? t.auth.createOne : mode === 'signup' ? t.auth.loginNow : (lang === 'fr' ? 'connexion' : 'sign in')}
             </button>
           </p>
 
