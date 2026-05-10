@@ -14,9 +14,9 @@ import { StatusDot } from '@/components/StatusDot';
 import { cn } from '@/lib/utils';
 
 const DashboardLayout = ({ children }: { children?: ReactNode }) => {
-  const user = useApp((s) => s.user);
+  const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
   const projects = useApp((s) => s.projects);
-  const logout = useApp((s) => s.logout);
+  const storeLogout = useApp((s) => s.logout);
   const navigate = useNavigate();
   const t = useT();
   const { lang, setLang } = useI18n();
@@ -25,8 +25,8 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
   const [project, setProject] = useState(projects[0]);
 
   useEffect(() => {
-    if (!user) navigate('/auth');
-  }, [user, navigate]);
+    if (!authLoading && !authUser) navigate('/auth');
+  }, [authUser, authLoading, navigate]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,7 +39,10 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (!user) return null;
+  if (authLoading || !authUser) return null;
+
+  const displayName = profile?.display_name || authUser.email?.split('@')[0] || 'user';
+  const userEmail = authUser.email || '';
 
   const groups: Array<{ label: string; items: Array<{ to: string; icon: any; label: string; end?: boolean }> }> = [
     {
