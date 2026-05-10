@@ -5,6 +5,7 @@ import { Stepper } from '@/components/Stepper';
 import { Terminal, TerminalLine } from '@/components/Terminal';
 import { StatusDot } from '@/components/StatusDot';
 import { Button } from '@/components/ui/button';
+import { VercelLivePanel } from '@/components/VercelLivePanel';
 import { Rocket, GitCommit, ExternalLink, RefreshCw, ChevronRight, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
