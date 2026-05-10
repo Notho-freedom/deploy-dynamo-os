@@ -4,9 +4,11 @@ import { useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Auth from "./pages/Auth.tsx";
+import ResetPassword from "./pages/ResetPassword.tsx";
 import DashboardLayout from "./pages/DashboardLayout.tsx";
 import Dashboard from "./pages/dashboard/Dashboard.tsx";
 import Builder from "./pages/dashboard/Builder.tsx";
@@ -33,24 +35,27 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/dashboard" element={<DashboardLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="builder" element={<Builder />} />
-              <Route path="ui" element={<UIGen />} />
-              <Route path="backend" element={<Backend />} />
-              <Route path="deploy" element={<Deploy />} />
-              <Route path="domains" element={<Domains />} />
-              <Route path="email" element={<EmailSetup />} />
-              <Route path="cicd" element={<CICD />} />
-              <Route path="monitoring" element={<Monitoring />} />
-              <Route path="billing" element={<Billing />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="builder" element={<Builder />} />
+                <Route path="ui" element={<UIGen />} />
+                <Route path="backend" element={<Backend />} />
+                <Route path="deploy" element={<Deploy />} />
+                <Route path="domains" element={<Domains />} />
+                <Route path="email" element={<EmailSetup />} />
+                <Route path="cicd" element={<CICD />} />
+                <Route path="monitoring" element={<Monitoring />} />
+                <Route path="billing" element={<Billing />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

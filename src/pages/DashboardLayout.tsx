@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Outlet, useNavigate, NavLink, useLocation, Link } from 'react-router-dom';
 import { useApp } from '@/lib/store';
+import { useAuth } from '@/hooks/useAuth';
 import { useT, useI18n } from '@/lib/i18n';
 import { Wordmark, Logo } from '@/components/Logo';
 import {
