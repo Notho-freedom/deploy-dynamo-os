@@ -5,7 +5,7 @@ export interface VercelProject {
   name: string;
   framework: string | null;
   updatedAt: number;
-  link?: { type: string; repo?: string; org?: string };
+  link?: { type: string; repo?: string; org?: string; repoId?: number };
   targets?: { production?: { url?: string } };
 }
 
@@ -19,29 +19,40 @@ export interface VercelDeployment {
   ready?: number;
   meta?: { githubCommitMessage?: string; githubCommitRef?: string };
   creator?: { username?: string };
+  projectId?: string;
 }
 
-export async function vercelConnect(token: string, teamId?: string) {
-  const { data, error } = await supabase.functions.invoke('vercel-connect', {
-    body: { token, teamId },
+export async function vercelOAuthExchange(code: string) {
+  const { data, error } = await supabase.functions.invoke('vercel-oauth-callback', {
+    body: { code, redirect_uri: `${window.location.origin}/integrations/vercel/callback` },
   });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   return data;
 }
 
-export async function vercelApi<T = any>(path: string, opts: {
-  method?: string;
-  query?: Record<string, any>;
-  body?: any;
-} = {}): Promise<T> {
+export async function vercelApi<T = any>(path: string, opts: { method?: string; query?: Record<string, any>; body?: any } = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke('vercel-api', {
     body: { path, method: opts.method || 'GET', query: opts.query, body: opts.body },
   });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
-  if (data?.status >= 400) throw new Error(`Vercel ${data.status}`);
+  if (data?.status >= 400) {
+    const msg = typeof data.data === 'object' ? data.data?.error?.message || JSON.stringify(data.data) : data.data;
+    throw new Error(`Vercel ${data.status}: ${msg}`);
+  }
   return data.data as T;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  framework?: string | null;
+  gitRepository?: { type: 'github'; repo: string };
+  rootDirectory?: string;
+  buildCommand?: string;
+  outputDirectory?: string;
+  installCommand?: string;
+  environmentVariables?: Array<{ key: string; value: string; target: ('production' | 'preview' | 'development')[]; type?: 'plain' | 'encrypted' }>;
 }
 
 export const vercel = {
@@ -51,12 +62,12 @@ export const vercel = {
       query: { limit: 30, ...(projectId ? { projectId } : {}) },
     }),
   getDeployment: (id: string) => vercelApi<VercelDeployment>(`/v13/deployments/${id}`),
-  cancelDeployment: (id: string) =>
-    vercelApi(`/v12/deployments/${id}/cancel`, { method: 'PATCH' }),
+  cancelDeployment: (id: string) => vercelApi(`/v12/deployments/${id}/cancel`, { method: 'PATCH' }),
   promoteDeployment: (projectId: string, deploymentId: string) =>
     vercelApi(`/v9/projects/${projectId}/promote/${deploymentId}`, { method: 'POST' }),
-  listDomains: (projectId: string) =>
-    vercelApi(`/v9/projects/${projectId}/domains`),
-  listEnv: (projectId: string) =>
-    vercelApi(`/v9/projects/${projectId}/env`),
+  listDomains: (projectId: string) => vercelApi(`/v9/projects/${projectId}/domains`),
+  listEnv: (projectId: string) => vercelApi(`/v9/projects/${projectId}/env`),
+  createProject: (input: CreateProjectInput) => vercelApi<VercelProject>('/v9/projects', { method: 'POST', body: input }),
+  createDeployment: (input: { name: string; gitSource: { type: 'github'; repoId: number; ref: string }; projectSettings?: any; target?: 'production' }) =>
+    vercelApi<VercelDeployment>('/v13/deployments', { method: 'POST', body: input }),
 };

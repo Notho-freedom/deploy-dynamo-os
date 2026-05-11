@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useIntegration } from '@/hooks/useIntegration';
 import { vercel, VercelDeployment, VercelProject } from '@/lib/vercel';
+import { startVercelOAuth } from '@/lib/github';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, ExternalLink, MoreHorizontal, Triangle } from 'lucide-react';
-import { VercelConnectDialog } from './VercelConnectDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
@@ -26,8 +26,7 @@ function fmt(ts?: number) {
 }
 
 export function VercelLivePanel() {
-  const { connected, connection, refresh } = useIntegration('vercel');
-  const [openConnect, setOpenConnect] = useState(false);
+  const { connected, connection } = useIntegration('vercel');
   const [projects, setProjects] = useState<VercelProject[]>([]);
   const [deployments, setDeployments] = useState<VercelDeployment[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('all');
@@ -56,12 +55,13 @@ export function VercelLivePanel() {
     return (
       <div className="border border-dashed border-border rounded-md p-8 text-center">
         <Triangle className="h-6 w-6 mx-auto mb-3 text-muted-foreground" />
-        <h3 className="font-editorial text-xl mb-1">Connect Vercel</h3>
+        <h3 className="font-editorial text-xl mb-1">Install Vercel Integration</h3>
         <p className="text-[13px] text-muted-foreground mb-4 max-w-sm mx-auto">
-          Stream real deployments, logs and analytics from your Vercel account. Your token never touches the browser.
+          Authorize the OnNebula Vercel app to manage your projects, deployments and domains. No token to paste.
         </p>
-        <Button onClick={() => setOpenConnect(true)}>Connect Vercel</Button>
-        <VercelConnectDialog open={openConnect} onOpenChange={setOpenConnect} onConnected={refresh} />
+        <Button onClick={startVercelOAuth} className="gap-2">
+          <Triangle className="h-3.5 w-3.5 fill-current" /> Install Vercel Integration
+        </Button>
       </div>
     );
   }
@@ -122,7 +122,6 @@ export function VercelLivePanel() {
                     <DropdownMenuItem
                       onClick={async () => {
                         try {
-                          // need projectId — find from projects by name
                           const proj = projects.find((p) => p.name === d.name);
                           if (!proj) throw new Error('Project not found');
                           await vercel.promoteDeployment(proj.id, d.uid);

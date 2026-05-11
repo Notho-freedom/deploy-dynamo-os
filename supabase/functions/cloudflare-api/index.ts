@@ -5,20 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Allowlist — paths only, query strings stripped before matching
+// Allowlist of Cloudflare endpoints we proxy
 const ALLOWED = [
-  /^\/v2\/user$/,
-  /^\/v2\/teams$/,
-  /^\/v9\/projects$/,                       // GET list, POST create
-  /^\/v9\/projects\/[^/]+$/,               // GET, PATCH, DELETE single
-  /^\/v6\/deployments$/,                   // GET list
-  /^\/v13\/deployments$/,                  // POST create
-  /^\/v13\/deployments\/[^/]+$/,           // GET single
-  /^\/v12\/deployments\/[^/]+\/cancel$/,
-  /^\/v9\/projects\/[^/]+\/promote\/[^/]+$/,
-  /^\/v2\/deployments\/[^/]+\/events$/,
-  /^\/v9\/projects\/[^/]+\/domains(\/[^/]+)?$/,
-  /^\/v9\/projects\/[^/]+\/env(\/[^/]+)?$/,
+  /^\/zones(\?.*)?$/,
+  /^\/zones\/[^/]+$/,
+  /^\/zones\/[^/]+\/dns_records(\?.*)?$/,
+  /^\/zones\/[^/]+\/dns_records\/[^/]+$/,
+  /^\/user\/tokens\/verify$/,
+  /^\/accounts\/[^/]+\/tokens\/verify$/,
 ];
 
 Deno.serve(async (req) => {
@@ -38,29 +32,18 @@ Deno.serve(async (req) => {
     const { path, method = 'GET', query, body: payload } = await req.json();
     if (typeof path !== 'string' || !path.startsWith('/')) return json({ error: 'Invalid path' }, 400);
     const pathOnly = path.split('?')[0];
-    if (!ALLOWED.some((re) => re.test(pathOnly))) return json({ error: 'Path not allowed', path: pathOnly }, 403);
+    if (!ALLOWED.some((re) => re.test(pathOnly))) return json({ error: 'Path not allowed' }, 403);
 
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: conn } = await admin
-      .from('connected_accounts')
-      .select('access_token, metadata')
-      .eq('user_id', user.id)
-      .eq('provider', 'vercel')
-      .maybeSingle();
-    if (!conn) return json({ error: 'Vercel not connected' }, 412);
+    const token = Deno.env.get('CLOUDFLARE_API_TOKEN');
+    if (!token) return json({ error: 'Cloudflare token not configured' }, 412);
 
-    const teamId = (conn.metadata?.team_id || conn.metadata?.teamId) as string | undefined;
-    const url = new URL(`https://api.vercel.com${path}`);
+    const url = new URL(`https://api.cloudflare.com/client/v4${path}`);
     if (query && typeof query === 'object') {
-      for (const [k, v] of Object.entries(query)) {
-        if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-      }
+      for (const [k, v] of Object.entries(query)) if (v != null) url.searchParams.set(k, String(v));
     }
-    if (teamId && !url.searchParams.has('teamId')) url.searchParams.set('teamId', teamId);
-
     const r = await fetch(url.toString(), {
       method,
-      headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: payload && method !== 'GET' ? JSON.stringify(payload) : undefined,
     });
     const text = await r.text();
