@@ -21,6 +21,8 @@ import CICD from "./pages/dashboard/CICD.tsx";
 import Monitoring from "./pages/dashboard/Monitoring.tsx";
 import Billing from "./pages/dashboard/Billing.tsx";
 import Settings from "./pages/dashboard/Settings.tsx";
+import VercelCallback from "./pages/integrations/VercelCallback.tsx";
+import GithubCallback from "./pages/integrations/GithubCallback.tsx";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +42,8 @@ const App = () => {
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/integrations/vercel/callback" element={<VercelCallback />} />
+              <Route path="/integrations/github/callback" element={<GithubCallback />} />
               <Route path="/dashboard" element={<DashboardLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="builder" element={<Builder />} />

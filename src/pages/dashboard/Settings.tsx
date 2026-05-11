@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Eye, EyeOff, Plus, Triangle, Github, Mail, Globe, CreditCard } from 'lucide-react';
-import { VercelConnectDialog } from '@/components/VercelConnectDialog';
+import { startGithubOAuth, startVercelOAuth } from '@/lib/github';
 import { toast } from 'sonner';
 
 const sections = ['profile', 'team', 'integrations', 'api', 'webhooks', 'preferences'] as const;
@@ -26,7 +26,7 @@ const INTEGRATIONS: IntegrationDef[] = [
   { id: 'lovable-ai', name: 'Lovable AI', desc: 'Streaming Gemini & GPT models for the Builder', cat: 'AI', icon: () => <span>✨</span>, kind: 'managed' },
   { id: 'resend', name: 'Resend', desc: 'Transactional email (invites, alerts, receipts)', cat: 'Email', icon: Mail, kind: 'managed' },
   { id: 'auth-google', name: 'Google Sign-in', desc: 'Social login enabled on /auth', cat: 'Auth', icon: () => <span>G</span>, kind: 'managed' },
-  { id: 'vercel', provider: 'vercel', name: 'Vercel', desc: 'Deploy via Personal Access Token', cat: 'Hosting', icon: Triangle, kind: 'token' },
+  { id: 'vercel', provider: 'vercel', name: 'Vercel', desc: 'Install the Vercel Integration to deploy from GitHub', cat: 'Hosting', icon: Triangle, kind: 'oauth' },
   { id: 'github', provider: 'github', name: 'GitHub', desc: 'OAuth for repository import & CI/CD', cat: 'Source', icon: Github, kind: 'oauth' },
   { id: 'zoho', provider: 'zoho', name: 'Zoho Mail', desc: 'Provision mailboxes on your domain', cat: 'Email', icon: Mail, kind: 'oauth' },
   { id: 'porkbun', provider: 'porkbun', name: 'Porkbun', desc: 'Domain registration & DNS (low fees, global TLDs)', cat: 'Domains', icon: Globe, kind: 'oauth' },
@@ -44,7 +44,6 @@ function StatusBadge({ live }: { live: boolean | 'soon' }) {
 
 function IntegrationRow({ def, lang }: { def: IntegrationDef; lang: 'fr' | 'en' }) {
   const intg = useIntegration((def.provider ?? 'vercel') as Provider);
-  const [openVercel, setOpenVercel] = useState(false);
 
   const isManaged = def.kind === 'managed';
   const isSoon = def.kind === 'soon';
@@ -52,42 +51,40 @@ function IntegrationRow({ def, lang }: { def: IntegrationDef; lang: 'fr' | 'en' 
   const live: boolean | 'soon' = isSoon ? 'soon' : isManaged || connected;
 
   const handleConnect = () => {
-    if (def.provider === 'vercel') setOpenVercel(true);
+    if (def.provider === 'vercel') startVercelOAuth();
+    else if (def.provider === 'github') startGithubOAuth();
     else toast.info(`${def.name} OAuth bientôt — credentials provider requis`);
   };
 
   return (
-    <>
-      <div className="px-4 py-3.5 flex items-center gap-4 text-[13px]">
-        <span className="h-8 w-8 rounded border border-border flex items-center justify-center text-[11px] font-mono text-muted-foreground shrink-0">
-          <def.icon className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-medium truncate">{def.name}</p>
-            <StatusBadge live={live} />
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">{def.cat}</span>
-          </div>
-          <p className="text-[12px] text-muted-foreground truncate mt-0.5">
-            {connected && intg.connection?.metadata?.username ? `Connected as ${intg.connection.metadata.username}` : def.desc}
-          </p>
+    <div className="px-4 py-3.5 flex items-center gap-4 text-[13px]">
+      <span className="h-8 w-8 rounded border border-border flex items-center justify-center text-[11px] font-mono text-muted-foreground shrink-0">
+        <def.icon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-medium truncate">{def.name}</p>
+          <StatusBadge live={live} />
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 font-mono">{def.cat}</span>
         </div>
-        {isManaged ? (
-          <Button variant="outline" size="sm" disabled>{lang === 'fr' ? 'Géré' : 'Managed'}</Button>
-        ) : isSoon ? (
-          <Button variant="outline" size="sm" disabled>Soon</Button>
-        ) : connected ? (
-          <Button variant="outline" size="sm" onClick={async () => { await intg.disconnect(); toast.success('Disconnected'); }}>
-            {lang === 'fr' ? 'Déconnecter' : 'Disconnect'}
-          </Button>
-        ) : (
-          <Button variant="outline" size="sm" onClick={handleConnect}>{lang === 'fr' ? 'Connecter' : 'Connect'}</Button>
-        )}
+        <p className="text-[12px] text-muted-foreground truncate mt-0.5">
+          {connected && (intg.connection?.metadata?.username || intg.connection?.metadata?.login)
+            ? `Connected as ${intg.connection.metadata.username || intg.connection.metadata.login}`
+            : def.desc}
+        </p>
       </div>
-      {def.provider === 'vercel' && (
-        <VercelConnectDialog open={openVercel} onOpenChange={setOpenVercel} onConnected={intg.refresh} />
+      {isManaged ? (
+        <Button variant="outline" size="sm" disabled>{lang === 'fr' ? 'Géré' : 'Managed'}</Button>
+      ) : isSoon ? (
+        <Button variant="outline" size="sm" disabled>Soon</Button>
+      ) : connected ? (
+        <Button variant="outline" size="sm" onClick={async () => { await intg.disconnect(); toast.success('Disconnected'); }}>
+          {lang === 'fr' ? 'Déconnecter' : 'Disconnect'}
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={handleConnect}>{lang === 'fr' ? 'Connecter' : 'Connect'}</Button>
       )}
-    </>
+    </div>
   );
 }
 
