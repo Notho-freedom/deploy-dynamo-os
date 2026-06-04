@@ -1,141 +1,136 @@
-import { useState } from 'react';
-import { useI18n } from '@/lib/i18n';
-import { useApp } from '@/lib/store';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { StatusDot } from '@/components/StatusDot';
-import { Search, Globe, Settings as Cog } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { toast } from '@/hooks/use-toast';
+import { useEffect, useMemo, useState } from 'react';
+import { Globe, Loader2, Search } from 'lucide-react';
+import { DashboardToolbar, EmptyPanel, FilterBar, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
+import { useUserProjects, UserProjectRecord } from '@/hooks/useDashboardData';
+import { vercel, VercelDomain } from '@/lib/vercel';
+import { cn } from '@/lib/utils';
 
-const tlds = [
-  { tld: '.com', price: 5900 },
-  { tld: '.app', price: 12000 },
-  { tld: '.io', price: 28500 },
-  { tld: '.dev', price: 9800 },
-  { tld: '.africa', price: 15500 },
-  { tld: '.ci', price: 32000 },
-  { tld: '.sn', price: 28000 },
-  { tld: '.ng', price: 18500 },
-];
+interface DomainRow extends VercelDomain {
+  projectName: string;
+  projectId: string;
+}
 
 export default function Domains() {
-  const { lang } = useI18n();
-  const { domains, addDomain } = useApp();
-  const [q, setQ] = useState('');
-  const [drawer, setDrawer] = useState<string | null>(null);
+  const { projects, loading: projectsLoading, error: projectsError } = useUserProjects();
+  const [domains, setDomains] = useState<DomainRow[]>([]);
+  const [loadingDomains, setLoadingDomains] = useState(false);
+  const [domainError, setDomainError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
-  const search = q.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      if (projects.length === 0) {
+        setDomains([]);
+        setLoadingDomains(false);
+        return;
+      }
+      setLoadingDomains(true);
+      setDomainError(null);
+      const results = await Promise.all(
+        projects.map(async (project: UserProjectRecord) => {
+          try {
+            const result = await vercel.listDomains(project.vercel_project_id);
+            return (result.domains || []).map((domain) => ({
+              ...domain,
+              projectName: project.vercel_project_name,
+              projectId: project.vercel_project_id,
+            }));
+          } catch (error) {
+            setDomainError(error instanceof Error ? error.message : String(error));
+            return [] as DomainRow[];
+          }
+        }),
+      );
+      if (!active) return;
+      setDomains(results.flat());
+      setLoadingDomains(false);
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [projects]);
+
+  const filtered = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return domains.filter((domain) => !normalized || domain.name.toLowerCase().includes(normalized) || domain.projectName.toLowerCase().includes(normalized));
+  }, [domains, query]);
+
+  const loading = projectsLoading || loadingDomains;
+  const error = projectsError || domainError;
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Domains</p>
-        <h1 className="font-editorial text-4xl tracking-tight">
-          {lang === 'fr' ? <>Réservez. <em className="italic text-muted-foreground">Pointez. Encaissez.</em></> : <>Register. <em className="italic text-muted-foreground">Point. Earn.</em></>}
-        </h1>
-      </div>
+    <div>
+      <DashboardToolbar
+        eyebrow="All Projects"
+        title="Domains"
+        subtitle="Domains attached to your imported Vercel projects."
+      />
 
-      <div className="border border-border p-5">
-        <div className="flex items-center gap-3 border border-border px-3 py-2.5">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={lang === 'fr' ? 'Trouvez votre nom de domaine…' : 'Find your domain name…'}
-            className="flex-1 bg-transparent outline-none text-[14px] font-mono"
-          />
-        </div>
-        {search && (
-          <div className="mt-4 divide-y divide-border border-t border-border">
-            {tlds.map((t) => {
-              const taken = ['.com', '.io'].includes(t.tld) && search.length < 8;
-              return (
-                <div key={t.tld} className="flex items-center gap-3 py-3 text-[13px]">
-                  <span className="font-mono">
-                    {search}<span className="text-primary">{t.tld}</span>
-                  </span>
-                  <span className={`text-[10px] uppercase tracking-wide ml-3 ${taken ? 'text-muted-foreground' : 'text-success'}`}>{taken ? 'taken' : 'available'}</span>
-                  <span className="font-mono text-muted-foreground ml-auto tabular-nums">{t.price.toLocaleString('fr-FR')} FCFA / an</span>
-                  <Button
-                    size="sm"
-                    disabled={taken}
-                    onClick={() => {
-                      addDomain({ name: search + t.tld, status: 'pending', expiresAt: '2027-01-01', autoRenew: true, registrar: 'namecheap' });
-                      toast({ title: 'Domaine en cours de réservation', description: search + t.tld });
-                    }}
-                    variant={taken ? 'ghost' : 'default'}
-                    className="h-7 text-[11px]"
-                  >
-                    {taken ? '—' : 'Add'}
-                  </Button>
-                </div>
-              );
-            })}
+      <div className="space-y-5 px-4 py-6 md:px-6">
+        <SectionPanel title="Find a Domain" meta="Registrar not connected">
+          <div className="p-4">
+            <div className="flex h-11 items-center gap-2 rounded-md border border-border bg-background px-3 text-[13px] text-muted-foreground">
+              <Search className="h-4 w-4" />
+              Domain search and registration need a real registrar source before results can be shown.
+            </div>
+          </div>
+        </SectionPanel>
+
+        <FilterBar query={query} onQueryChange={setQuery} placeholder="Search domains..." />
+
+        {error && (
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-warning">
+            Some domain data could not be loaded: {error}
           </div>
         )}
-      </div>
 
-      <div>
-        <h2 className="text-[13px] uppercase tracking-widest text-muted-foreground mb-3">{lang === 'fr' ? 'Vos domaines' : 'Your domains'}</h2>
-        <div className="border border-border">
-          <table className="w-full">
-            <thead className="border-b border-border text-[11px] uppercase tracking-widest text-muted-foreground">
-              <tr>
-                <th className="text-left font-normal px-4 py-2.5">Domain</th>
-                <th className="text-left font-normal px-4 py-2.5">Project</th>
-                <th className="text-left font-normal px-4 py-2.5">Nameservers</th>
-                <th className="text-left font-normal px-4 py-2.5">Expires</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {domains.map((d) => (
-                <tr key={d.name} className="text-[13px] hover:bg-muted/30">
-                  <td className="px-4 py-3 font-mono">{d.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-[12px]">{d.projectId ?? '—'}</td>
-                  <td className="px-4 py-3"><span className="inline-flex items-center gap-1.5 text-[12px]"><StatusDot tone={d.status === 'active' ? 'success' : 'warning'} pulse={d.status === 'pending'} /> {d.status === 'active' ? 'configured' : 'verifying'}</span></td>
-                  <td className="px-4 py-3 font-mono text-[12px] text-muted-foreground">{d.expiresAt}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => setDrawer(d.name)} className="text-muted-foreground hover:text-foreground"><Cog className="h-3.5 w-3.5" /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <Sheet open={!!drawer} onOpenChange={(v) => !v && setDrawer(null)}>
-        <SheetContent className="sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle className="font-editorial italic text-2xl">{drawer}</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6 space-y-5">
-            <div>
-              <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">DNS records</p>
-              <div className="border border-border">
-                <table className="w-full text-[12px] font-mono">
-                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-                    <tr><th className="text-left px-3 py-2 font-normal">Type</th><th className="text-left px-3 py-2 font-normal">Name</th><th className="text-left px-3 py-2 font-normal">Value</th><th className="text-left px-3 py-2 font-normal">TTL</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {[
-                      ['A', '@', '76.76.21.21', '3600'],
-                      ['CNAME', 'www', 'cname.nebula.app.', '3600'],
-                      ['MX', '@', '10 mx.zoho.com.', '3600'],
-                      ['TXT', '@', 'v=spf1 include:zoho.com ~all', '3600'],
-                    ].map((r, i) => (
-                      <tr key={i}>{r.map((c, j) => <td key={j} className="px-3 py-2">{c}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+        <SectionPanel title="Project Domains" meta={filtered.length ? `${filtered.length}` : 'Empty'}>
+          {loading ? (
+            <div className="flex h-44 items-center justify-center gap-2 text-[13px] text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading domains...
             </div>
-            <Button variant="outline" className="w-full">Add record</Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+          ) : filtered.length === 0 ? (
+            <EmptyPanel
+              className="rounded-none border-0 bg-transparent"
+              icon={<Globe className="h-10 w-10" />}
+              title="No domains found"
+              description="Attached Vercel domains will appear here once a project has domains configured."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-[13px]">
+                <thead className="border-b border-border text-[11px] text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium">Domain</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Project</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Status</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Branch</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Updated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((domain) => (
+                    <tr key={`${domain.projectId}-${domain.name}`} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium">{domain.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{domain.projectName}</td>
+                      <td className="px-4 py-3">
+                        <span className={cn('rounded-full border px-2 py-0.5 text-[12px]', domain.verified ? 'border-success/30 bg-success/10 text-success' : 'border-warning/30 bg-warning/10 text-warning')}>
+                          {domain.verified ? 'Verified' : 'Needs verification'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{domain.gitBranch || 'Production'}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{domain.updatedAt ? new Date(domain.updatedAt).toLocaleDateString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionPanel>
+      </div>
     </div>
   );
 }

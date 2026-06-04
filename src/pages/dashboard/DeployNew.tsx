@@ -1,132 +1,205 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useIntegration } from '@/hooks/useIntegration';
-import { github, GhRepo, GhOrg, startGithubOAuth } from '@/lib/github';
-import { Button } from '@/components/ui/button';
-import { Github, Search, Lock, Loader2, ArrowRight, ArrowLeft, ChevronDown } from 'lucide-react';
-import { toast } from 'sonner';
+import { ArrowLeft, ArrowRight, Bot, Boxes, Code2, Github, Loader2, Lock, Plus, Search, Sparkles, Workflow } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { EmptyPanel, SelectFilter } from '@/components/dashboard/DashboardPrimitives';
+import { startGithubOAuth } from '@/lib/github';
+import { useGithubRepos } from '@/hooks/useGithubRepos';
 
 export default function DeployNew() {
   const navigate = useNavigate();
-  const gh = useIntegration('github');
-  const [repos, setRepos] = useState<GhRepo[]>([]);
-  const [orgs, setOrgs] = useState<GhOrg[]>([]);
-  const [owner, setOwner] = useState<string>('all');
-  const [q, setQ] = useState('');
-  const [loading, setLoading] = useState(false);
+  const githubRepos = useGithubRepos();
+  const [owner, setOwner] = useState('all');
+  const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    if (!gh.connected) return;
-    setLoading(true);
-    Promise.all([github.myRepos(), github.myOrgs().catch(() => [])])
-      .then(([r, o]) => { setRepos(r); setOrgs(o); })
-      .catch((e) => toast.error(e.message))
-      .finally(() => setLoading(false));
-  }, [gh.connected]);
-
-  const owners = useMemo(() => {
-    const set = new Set<string>();
-    repos.forEach((r) => set.add(r.owner.login));
-    orgs.forEach((o) => set.add(o.login));
-    return Array.from(set);
-  }, [repos, orgs]);
-
-  const filtered = useMemo(() => {
-    const ql = q.toLowerCase();
-    return repos
-      .filter((r) => owner === 'all' || r.owner.login === owner)
-      .filter((r) => !ql || r.full_name.toLowerCase().includes(ql) || (r.description || '').toLowerCase().includes(ql));
-  }, [repos, owner, q]);
+  const filteredRepos = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return githubRepos.repos
+      .filter((repo) => owner === 'all' || repo.owner.login === owner)
+      .filter((repo) => !normalized || repo.full_name.toLowerCase().includes(normalized) || (repo.description || '').toLowerCase().includes(normalized));
+  }, [githubRepos.repos, owner, query]);
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <button onClick={() => navigate('/dashboard/deploy')} className="text-[12px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5">
-        <ArrowLeft className="h-3 w-3" /> Projects
-      </button>
-
-      <div>
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Step 1 of 2</p>
-        <h1 className="font-editorial text-4xl tracking-tight">
-          Import <em className="italic text-muted-foreground">Git Repository</em>
-        </h1>
-        <p className="text-[13px] text-muted-foreground mt-2">
-          Pick a repository to deploy. We'll auto-detect your framework and create a project on the platform.
-        </p>
+    <div className="min-h-[calc(100vh-56px)]">
+      <div className="flex h-14 items-center justify-between border-b border-border px-4 md:px-6">
+        <button onClick={() => navigate('/dashboard/deploy')} className="inline-flex items-center gap-2 text-[13px] text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
+        <h1 className="text-[14px] font-semibold">New Project</h1>
+        <div className="w-16" />
       </div>
 
-      {!gh.connected ? (
-        <div className="border border-border p-10 text-center">
-          <Github className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-          <h3 className="font-editorial text-xl mb-1">Connect GitHub</h3>
-          <p className="text-[13px] text-muted-foreground mb-4">Authorize access to import your repositories.</p>
-          <Button onClick={startGithubOAuth} className="gap-2 bg-[#1a1a1a] hover:bg-[#2a2a2a] text-white">
-            <Github className="h-4 w-4" /> Continue with GitHub
-          </Button>
-        </div>
-      ) : (
-        <>
-          {/* Owner + search */}
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative">
-              <select
-                value={owner}
-                onChange={(e) => setOwner(e.target.value)}
-                className="h-10 pl-3 pr-8 text-[13px] font-mono bg-background border border-border rounded-md appearance-none min-w-[180px]"
-              >
-                <option value="all">All accounts</option>
-                {owners.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-              <ChevronDown className="h-3 w-3 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
-            </div>
-            <div className="flex-1 flex items-center gap-2 border border-border px-3 h-10 rounded-md">
-              <Search className="h-3.5 w-3.5 text-muted-foreground" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search…"
-                className="flex-1 bg-transparent outline-none text-[13px] font-mono"
-              />
-              <span className="text-[11px] font-mono text-muted-foreground">{filtered.length}/{repos.length}</span>
-            </div>
+      <div className="mx-auto max-w-[1180px] px-4 py-10 md:px-6">
+        <div className="mb-10">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <h2 className="text-[28px] font-semibold tracking-normal md:text-[34px]">Let's build something new</h2>
+            <Button variant="outline" className="hidden gap-2 md:inline-flex">
+              <Sparkles className="h-4 w-4" />
+              Collaborate on a Pro Trial
+            </Button>
           </div>
 
-          {/* Repo list — scrollable, max ~8 rows visible */}
-          <div className="border border-border rounded-md overflow-hidden">
-            <div className="max-h-[480px] overflow-y-auto divide-y divide-border">
-              {loading && (
-                <div className="px-4 py-12 text-center text-[13px] text-muted-foreground flex items-center justify-center gap-2">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Loading repositories…
-                </div>
-              )}
-              {!loading && filtered.length === 0 && (
-                <div className="px-4 py-12 text-center text-[13px] text-muted-foreground">No repositories match.</div>
-              )}
-              {filtered.map((r) => (
-                <div key={r.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition group">
-                  <img src={r.owner.avatar_url} className="h-7 w-7 rounded-md shrink-0" alt="" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[13px] truncate">{r.full_name}</span>
-                      {r.private && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground font-mono truncate">
-                      {r.language || '—'} · {r.default_branch} · {formatDistanceToNow(new Date(r.pushed_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => navigate(`/dashboard/deploy/new/configure?repo=${encodeURIComponent(r.full_name)}&id=${r.id}`)}
-                    className="gap-1.5"
-                  >
-                    Import <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+          <div className="flex min-h-12 items-center gap-3 rounded-md border border-border bg-card px-4">
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <input
+              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+              placeholder="Ask AI to build or enter a Git repository URL..."
+            />
           </div>
-        </>
-      )}
+
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {['Contact Form', 'Image Editor', 'Mini Game', 'Finance Calculator'].map((suggestion) => (
+              <button key={suggestion} className="rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground hover:border-foreground/40 hover:text-foreground">
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-8 border-y border-border py-8 lg:grid-cols-[1fr_1px_1.2fr]">
+          <section className="min-w-0">
+            <h3 className="mb-5 text-[20px] font-semibold">Import Git Repository</h3>
+
+            {!githubRepos.connected ? (
+              <EmptyPanel
+                icon={<Github className="h-10 w-10" />}
+                title="Connect GitHub"
+                description="Authorize GitHub to list your real repositories. No placeholder repositories are shown here."
+                action={
+                  <Button onClick={startGithubOAuth} className="gap-2">
+                    <Github className="h-4 w-4" />
+                    Continue with GitHub
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="space-y-3">
+                <div className="grid gap-2 md:grid-cols-[240px_1fr]">
+                  <SelectFilter
+                    label="GitHub account"
+                    value={owner}
+                    onChange={setOwner}
+                    options={[
+                      { label: 'All accounts', value: 'all' },
+                      ...githubRepos.owners.map((name) => ({ label: name, value: name })),
+                    ]}
+                  />
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-card px-3">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search..."
+                      className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+                    />
+                  </label>
+                </div>
+
+                {githubRepos.error && (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[13px] text-warning">
+                    GitHub repositories could not be loaded: {githubRepos.error}
+                  </div>
+                )}
+
+                <div className="overflow-hidden rounded-md border border-border bg-card">
+                  <div className="max-h-[430px] overflow-y-auto divide-y divide-border">
+                    {githubRepos.loading && (
+                      <div className="flex h-40 items-center justify-center gap-2 text-[13px] text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading repositories...
+                      </div>
+                    )}
+                    {!githubRepos.loading && filteredRepos.length === 0 && (
+                      <div className="px-4 py-12 text-center text-[13px] text-muted-foreground">No repositories match.</div>
+                    )}
+                    {filteredRepos.map((repo) => (
+                      <div key={repo.id} className="flex items-center gap-3 px-4 py-3 transition hover:bg-muted/30">
+                        <img src={repo.owner.avatar_url} className="h-8 w-8 shrink-0 rounded-md" alt="" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-[13px] font-semibold">{repo.name}</p>
+                            {repo.private && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </div>
+                          <p className="truncate text-[12px] text-muted-foreground">
+                            {repo.full_name} · {repo.language || 'Unknown'} · {repo.default_branch} · {formatDistanceToNow(new Date(repo.pushed_at), { addSuffix: true })}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => navigate(`/dashboard/deploy/new/configure?repo=${encodeURIComponent(repo.full_name)}&id=${repo.id}`)}
+                          className="gap-1.5"
+                        >
+                          Import
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <div className="hidden bg-border lg:block" />
+
+          <section className="space-y-8">
+            <div>
+              <h3 className="mb-5 text-[20px] font-semibold">AI building blocks</h3>
+              <div className="space-y-3">
+                <FeatureRow icon={<Bot className="h-4 w-4" />} title="AI Gateway" description="One endpoint for model providers. Coming soon in this workspace." />
+                <FeatureRow icon={<Boxes className="h-4 w-4" />} title="Sandboxes" description="Run generated code in isolated environments once the backend is connected." />
+                <FeatureRow icon={<Workflow className="h-4 w-4" />} title="Workflows" description="Long-running jobs will appear here when a workflow source exists." />
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-3 text-[13px] text-muted-foreground">Looking for something else?</p>
+              <FeatureRow
+                icon={<Code2 className="h-4 w-4" />}
+                title="Create Empty Project"
+                description="Not connected yet. Import from GitHub for a real project source."
+                action={<Button disabled variant="outline" size="sm">Create</Button>}
+              />
+            </div>
+          </section>
+        </div>
+
+        <section className="py-8">
+          <div className="mb-5 flex items-center justify-between">
+            <h3 className="text-[20px] font-semibold">Clone Template</h3>
+            <span className="text-[12px] text-muted-foreground">No template source connected</span>
+          </div>
+          <EmptyPanel
+            title="Templates are not connected"
+            description="A real template catalog can be wired here later. For now, this page only shows real GitHub repositories."
+          />
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function FeatureRow({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-md border border-border bg-card p-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[14px] font-semibold">{title}</p>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
+      </div>
+      {action || <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
     </div>
   );
 }

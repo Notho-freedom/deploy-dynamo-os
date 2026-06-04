@@ -1,244 +1,249 @@
-import { ReactNode, useEffect, useState } from 'react';
-import { Outlet, useNavigate, NavLink, useLocation, Link } from 'react-router-dom';
-import { useApp } from '@/lib/store';
-import { useAuth } from '@/hooks/useAuth';
-import { useT, useI18n } from '@/lib/i18n';
-import { Wordmark, Logo } from '@/components/Logo';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutGrid, Sparkles, Layout, Database, Rocket, Globe, Mail, GitBranch, Activity, Wallet, Settings as Cog,
-  LogOut, Search, ChevronDown, Plus,
+  Activity,
+  Bell,
+  Box,
+  ChevronDown,
+  CircleDollarSign,
+  Code2,
+  Database,
+  GitBranch,
+  Globe,
+  LayoutGrid,
+  List,
+  Loader2,
+  LogOut,
+  Mail,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  Rocket,
+  Search,
+  Settings,
+  Shield,
+  SlidersHorizontal,
+  Workflow,
+  Zap,
 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
-import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { StatusDot } from '@/components/StatusDot';
+import { useAuth } from '@/hooks/useAuth';
+import { useDashboardProjects } from '@/hooks/useDashboardData';
+import { useApp } from '@/lib/store';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 
-const DashboardLayout = ({ children }: { children?: ReactNode }) => {
-  const { user: authUser, profile, loading: authLoading, signOut } = useAuth();
-  const projects = useApp((s) => s.projects);
-  const storeLogout = useApp((s) => s.logout);
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  badge?: string;
+}
+
+const productNav: NavItem[] = [
+  { to: '/dashboard', label: 'Projects', icon: LayoutGrid, end: true },
+  { to: '/dashboard/deploy', label: 'Deployments', icon: Box },
+  { to: '/dashboard/monitoring', label: 'Logs', icon: List },
+  { to: '/dashboard/monitoring', label: 'Analytics', icon: Activity },
+  { to: '/dashboard/monitoring', label: 'Observability', icon: Zap },
+  { to: '/dashboard/backend', label: 'Storage', icon: Database },
+  { to: '/dashboard/cicd', label: 'Integrations', icon: GitBranch },
+];
+
+const configNav: NavItem[] = [
+  { to: '/dashboard/domains', label: 'Domains', icon: Globe },
+  { to: '/dashboard/backend', label: 'Environment Variables', icon: SlidersHorizontal },
+  { to: '/dashboard/email', label: 'Email', icon: Mail },
+  { to: '/dashboard/billing', label: 'Billing', icon: CircleDollarSign },
+  { to: '/dashboard/settings', label: 'Settings', icon: Settings },
+];
+
+const platformNav: NavItem[] = [
+  { to: '/dashboard/builder', label: 'Builder', icon: Code2 },
+  { to: '/dashboard/ui', label: 'UI Generator', icon: Workflow },
+  { to: '/dashboard/backend', label: 'Backend', icon: Shield },
+];
+
+function sectionLabel(pathname: string) {
+  const all = [...productNav, ...configNav, ...platformNav];
+  if (pathname === '/dashboard') return 'Overview';
+  if (pathname.includes('/deploy/new')) return 'New Project';
+  if (/\/dashboard\/deploy\/[^/]+/.test(pathname)) return 'Deployment Details';
+  return all.find((item) => item.to === pathname)?.label || 'Dashboard';
+}
+
+function navIsActive(item: NavItem, pathname: string) {
+  if (item.end) return pathname === item.to;
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+export default function DashboardLayout({ children }: { children?: ReactNode }) {
+  const { user, profile, loading: authLoading, signOut } = useAuth();
+  const storeLogout = useApp((state) => state.logout);
+  const { projects, loading: projectsLoading } = useDashboardProjects();
   const navigate = useNavigate();
-  const t = useT();
-  const { lang, setLang } = useI18n();
   const location = useLocation();
+  const { lang, setLang } = useI18n();
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [project, setProject] = useState(projects[0]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !authUser) navigate('/auth');
-  }, [authUser, authLoading, navigate]);
+    if (!authLoading && !user) navigate('/auth');
+  }, [authLoading, navigate, user]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setCmdOpen((o) => !o);
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCmdOpen((open) => !open);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  if (authLoading || !authUser) return null;
+  useEffect(() => {
+    if (!selectedProjectId && projects[0]) setSelectedProjectId(projects[0].projectId);
+  }, [projects, selectedProjectId]);
 
-  const displayName = profile?.display_name || authUser.email?.split('@')[0] || 'user';
-  const userEmail = authUser.email || '';
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.projectId === selectedProjectId) || projects[0] || null,
+    [projects, selectedProjectId],
+  );
 
-  const groups: Array<{ label: string; items: Array<{ to: string; icon: any; label: string; end?: boolean }> }> = [
-    {
-      label: 'Workspace',
-      items: [
-        { to: '/dashboard', icon: LayoutGrid, label: lang === 'fr' ? 'Vue d\'ensemble' : 'Overview', end: true },
-        { to: '/dashboard/billing', icon: Wallet, label: t.modules.billing.name },
-        { to: '/dashboard/domains', icon: Globe, label: t.modules.domain.name },
-        { to: '/dashboard/email', icon: Mail, label: t.modules.email.name },
-      ],
-    },
-    {
-      label: 'Project',
-      items: [
-        { to: '/dashboard/builder', icon: Sparkles, label: t.modules.builder.name },
-        { to: '/dashboard/ui', icon: Layout, label: t.modules.ui.name },
-        { to: '/dashboard/backend', icon: Database, label: t.modules.backend.name },
-        { to: '/dashboard/deploy', icon: Rocket, label: t.modules.deploy.name },
-        { to: '/dashboard/cicd', icon: GitBranch, label: t.modules.cicd.name },
-        { to: '/dashboard/monitoring', icon: Activity, label: t.modules.monitoring.name },
-      ],
-    },
-    {
-      label: 'Account',
-      items: [
-        { to: '/dashboard/settings', icon: Cog, label: 'Settings' },
-      ],
-    },
-  ];
+  if (authLoading || !user) return null;
 
-  // breadcrumb
-  const seg = location.pathname.split('/').filter(Boolean); // ['dashboard', 'deploy']
-  const sectionLabel = (() => {
-    if (seg.length <= 1) return lang === 'fr' ? 'Vue d\'ensemble' : 'Overview';
-    const all = groups.flatMap((g) => g.items);
-    return all.find((i) => i.to === location.pathname)?.label ?? seg[1];
-  })();
+  const displayName = profile?.display_name || user.email?.split('@')[0] || 'Workspace';
+  const pageTitle = sectionLabel(location.pathname);
+
+  const sidebar = (
+    <DashboardSidebar
+      displayName={displayName}
+      projectName={selectedProject?.name || 'All Projects'}
+      projectsLoading={projectsLoading}
+      pathname={location.pathname}
+      onNavigate={() => setMobileOpen(false)}
+      onSearch={() => setCmdOpen(true)}
+    />
+  );
 
   return (
-    <div className="min-h-screen flex w-full bg-background text-foreground">
-      {/* SIDEBAR */}
-      <aside className="hidden md:flex w-[244px] shrink-0 flex-col border-r border-border bg-background">
-        <div className="h-14 px-5 flex items-center border-b border-border">
-          <Link to="/" className="hover:opacity-80 transition"><Wordmark /></Link>
-        </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="flex min-h-screen">
+        <aside className="hidden w-[256px] shrink-0 border-r border-border bg-background md:block">{sidebar}</aside>
 
-        {/* project switcher */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="mx-3 mt-4 flex items-center gap-3 px-3 py-2.5 border border-border hover:border-foreground/40 rounded-md text-left transition-colors">
-              <span className="h-6 w-6 rounded gradient-cosmic bg-primary/20 border border-primary/40 flex items-center justify-center text-[10px] font-mono text-primary">
-                {project?.name[0].toUpperCase()}
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12.5px] font-mono truncate leading-tight">{project?.name}</p>
-                <p className="text-[10.5px] text-muted-foreground truncate font-mono leading-tight mt-0.5">{project?.framework}</p>
-              </div>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="w-[280px] p-0">
+            {sidebar}
+          </SheetContent>
+        </Sheet>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-3 backdrop-blur md:px-5">
+            <button onClick={() => setMobileOpen(true)} className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border md:hidden" aria-label="Open navigation">
+              <Menu className="h-4 w-4" />
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[220px]">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Projects</DropdownMenuLabel>
-            {projects.map((p) => (
-              <DropdownMenuItem key={p.id} onClick={() => setProject(p)} className="font-mono text-[12px]">
-                {p.name}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/dashboard/builder')}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" /> New project
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
-        <nav className="flex-1 overflow-y-auto py-5">
-          {groups.map((g, gi) => (
-            <div key={g.label} className={cn(gi > 0 && 'mt-7')}>
-              <p className="px-6 mb-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-mono">{g.label}</p>
-              <ul className="space-y-0.5">
-                {g.items.map((it) => (
-                  <li key={it.to} className="relative px-3">
-                    <NavLink
-                      to={it.to}
-                      end={it.end}
-                      className={({ isActive }) =>
-                        cn(
-                          'group flex items-center gap-3 px-3 py-2 text-[13px] font-mono rounded-md transition-colors',
-                          isActive
-                            ? 'text-foreground bg-muted/40'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/20',
-                        )
-                      }
-                    >
-                      {({ isActive }) => (
-                        <>
-                          {isActive && <span className="absolute -left-px top-2 bottom-2 w-[2px] bg-primary rounded-r" />}
-                          <it.icon className={cn('h-3.5 w-3.5 shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground/70 group-hover:text-foreground')} />
-                          <span className="truncate">{it.label}</span>
-                        </>
-                      )}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
+            <ProjectSwitcher
+              projects={projects}
+              selectedProjectId={selectedProject?.projectId || null}
+              onSelect={setSelectedProjectId}
+              loading={projectsLoading}
+            />
+
+            <div className="hidden min-w-0 items-center gap-2 text-[13px] text-muted-foreground lg:flex">
+              <span>/</span>
+              <span className="truncate text-foreground">{pageTitle}</span>
             </div>
-          ))}
-        </nav>
 
-        <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
-            <StatusDot tone="success" /> All systems normal
-          </div>
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="ml-auto hidden h-8 w-72 max-w-[32vw] items-center gap-2 rounded-md border border-border bg-card px-2.5 text-[12px] text-muted-foreground transition hover:border-foreground/30 md:flex"
+            >
+              <Search className="h-3.5 w-3.5" />
+              <span className="flex-1 text-left">Find projects, deployments, actions...</span>
+              <kbd className="rounded border border-border px-1 text-[10px]">F</kbd>
+            </button>
+
+            <button onClick={() => navigate('/dashboard/deploy/new')} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-foreground px-3 text-[12px] font-medium text-background hover:bg-foreground/90">
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Add New</span>
+            </button>
+
+            <button onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')} className="h-8 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground">
+              {lang.toUpperCase()}
+            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-[12px] font-semibold">
+                  {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full rounded-full object-cover" /> : displayName[0]?.toUpperCase()}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <p className="truncate text-[13px] font-medium">{displayName}</p>
+                  <p className="truncate text-[11px] font-normal text-muted-foreground">{user.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
+                  <Settings className="mr-2 h-3.5 w-3.5" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/dashboard/billing')}>
+                  <CircleDollarSign className="mr-2 h-3.5 w-3.5" />
+                  Billing
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={async () => { await signOut(); storeLogout(); navigate('/'); }}>
+                  <LogOut className="mr-2 h-3.5 w-3.5" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </header>
+
+          <main className="min-h-0 flex-1 overflow-auto">
+            <div className="mx-auto w-full max-w-[1600px]">{children || <Outlet />}</div>
+          </main>
         </div>
-      </aside>
-
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* TOPBAR */}
-        <header className="h-14 flex items-center px-5 gap-5 border-b border-border bg-background sticky top-0 z-30">
-          <div className="flex items-center gap-2 text-[12px] font-mono text-muted-foreground min-w-0">
-            <span className="hidden sm:inline">akua</span>
-            <span className="hidden sm:inline">/</span>
-            <span className="hidden sm:inline truncate">{project?.name}</span>
-            <span className="hidden sm:inline">/</span>
-            <span className="text-foreground truncate">{sectionLabel}</span>
-          </div>
-
-          <button
-            onClick={() => setCmdOpen(true)}
-            className="ml-auto flex items-center gap-2 border border-border hover:border-foreground/40 rounded-md px-2.5 py-1 text-[12px] text-muted-foreground transition w-56 max-w-[40vw]"
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="flex-1 text-left">{lang === 'fr' ? 'Rechercher…' : 'Search…'}</span>
-            <kbd className="hidden md:inline font-mono text-[10px] border border-border px-1 py-0.5 rounded">⌘K</kbd>
-          </button>
-
-          <button
-            onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-            className="text-[11px] font-mono text-muted-foreground hover:text-foreground transition"
-            title="Switch language"
-          >
-            {lang.toUpperCase()}
-          </button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="h-7 w-7 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center font-mono text-[11px] text-primary overflow-hidden">
-                {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayName[0]?.toUpperCase()}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>
-                <p className="font-medium text-[13px]">{displayName}</p>
-                <p className="text-[11px] text-muted-foreground font-normal font-mono">{userEmail}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/dashboard/settings')}>
-                <Cog className="h-3.5 w-3.5 mr-2" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate('/dashboard/billing')}>
-                <Wallet className="h-3.5 w-3.5 mr-2" /> Billing
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={async () => { await signOut(); storeLogout(); navigate('/'); }}>
-                <LogOut className="h-3.5 w-3.5 mr-2" /> Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </header>
-
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-6xl mx-auto px-6 py-8">{children || <Outlet />}</div>
-        </main>
       </div>
 
       <CommandDialog open={cmdOpen} onOpenChange={setCmdOpen}>
-        <CommandInput placeholder={lang === 'fr' ? 'Rechercher un projet, une action…' : 'Search projects, actions…'} />
+        <CommandInput placeholder="Search projects, deployments, actions..." />
         <CommandList>
-          <CommandEmpty>{lang === 'fr' ? 'Aucun résultat.' : 'No results.'}</CommandEmpty>
+          <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Projects">
-            {projects.map((p) => (
-              <CommandItem key={p.id} onSelect={() => { setProject(p); setCmdOpen(false); }}>
-                <Logo size={14} className="text-primary mr-2" />
-                <span className="font-mono">{p.name}</span>
-                <span className="text-muted-foreground text-xs ml-auto">{p.framework}</span>
+            {projects.map((project) => (
+              <CommandItem
+                key={project.projectId}
+                onSelect={() => {
+                  setSelectedProjectId(project.projectId);
+                  setCmdOpen(false);
+                  navigate(`/dashboard/deploy/${project.projectId}`);
+                }}
+              >
+                <LayoutGrid className="mr-2 h-4 w-4" />
+                <span>{project.name}</span>
+                <span className="ml-auto truncate text-[11px] text-muted-foreground">{project.repo}</span>
               </CommandItem>
             ))}
           </CommandGroup>
           <CommandGroup heading="Actions">
             {[
-              { label: lang === 'fr' ? 'Nouveau projet' : 'New project', to: '/dashboard/builder' },
-              { label: lang === 'fr' ? 'Déployer' : 'Deploy', to: '/dashboard/deploy' },
-              { label: lang === 'fr' ? 'Recharger le wallet' : 'Top up wallet', to: '/dashboard/billing' },
-              { label: lang === 'fr' ? 'Acheter un domaine' : 'Buy a domain', to: '/dashboard/domains' },
-            ].map((a) => (
-              <CommandItem key={a.to} onSelect={() => { setCmdOpen(false); navigate(a.to); }}>
-                {a.label}
+              { label: 'Import Git Repository', to: '/dashboard/deploy/new', icon: Plus },
+              { label: 'View Deployments', to: '/dashboard/deploy', icon: Rocket },
+              { label: 'Manage Domains', to: '/dashboard/domains', icon: Globe },
+              { label: 'Open Settings', to: '/dashboard/settings', icon: Settings },
+            ].map((item) => (
+              <CommandItem key={item.to} onSelect={() => { setCmdOpen(false); navigate(item.to); }}>
+                <item.icon className="mr-2 h-4 w-4" />
+                {item.label}
               </CommandItem>
             ))}
           </CommandGroup>
@@ -246,6 +251,136 @@ const DashboardLayout = ({ children }: { children?: ReactNode }) => {
       </CommandDialog>
     </div>
   );
-};
+}
 
-export default DashboardLayout;
+function DashboardSidebar({
+  displayName,
+  projectName,
+  projectsLoading,
+  pathname,
+  onNavigate,
+  onSearch,
+}: {
+  displayName: string;
+  projectName: string;
+  projectsLoading: boolean;
+  pathname: string;
+  onNavigate: () => void;
+  onSearch: () => void;
+}) {
+  return (
+    <div className="flex h-full min-h-screen flex-col">
+      <div className="flex h-14 items-center gap-2 px-3">
+        <Link to="/dashboard" onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/40">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">{displayName[0]?.toUpperCase()}</span>
+          <span className="truncate text-[13px] font-semibold">{displayName}'s projects</span>
+        </Link>
+        <button className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground" aria-label="Workspace menu">
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="px-2 pb-2">
+        <button onClick={onSearch} className="flex h-10 w-full items-center gap-2 rounded-md border border-border bg-card px-3 text-left text-[13px] text-muted-foreground hover:border-foreground/30">
+          <Search className="h-4 w-4" />
+          <span className="min-w-0 flex-1">Find...</span>
+          <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px]">F</kbd>
+        </button>
+      </div>
+
+      <div className="border-y border-border px-3 py-3">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-sm bg-primary" />
+          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{projectsLoading ? 'Loading projects...' : projectName}</span>
+          {projectsLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
+        <NavGroup items={productNav} pathname={pathname} onNavigate={onNavigate} />
+        <div className="my-3 h-px bg-border" />
+        <NavGroup items={configNav} pathname={pathname} onNavigate={onNavigate} />
+        <div className="my-3 h-px bg-border" />
+        <NavGroup items={platformNav} pathname={pathname} onNavigate={onNavigate} />
+      </nav>
+
+      <div className="border-t border-border p-2">
+        <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[12px] text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+          <Bell className="h-4 w-4" />
+          <span className="min-w-0 flex-1">Notifications</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NavGroup({ items, pathname, onNavigate }: { items: NavItem[]; pathname: string; onNavigate: () => void }) {
+  return (
+    <ul className="space-y-0.5">
+      {items.map((item) => {
+        const active = navIsActive(item, pathname);
+        return (
+          <li key={`${item.label}-${item.to}`}>
+            <NavLink
+              to={item.to}
+              end={item.end}
+              onClick={onNavigate}
+              className={cn(
+                'flex h-9 items-center gap-2 rounded-md px-2.5 text-[13px] transition',
+                active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {item.badge && <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">{item.badge}</span>}
+            </NavLink>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ProjectSwitcher({
+  projects,
+  selectedProjectId,
+  onSelect,
+  loading,
+}: {
+  projects: ReturnType<typeof useDashboardProjects>['projects'];
+  selectedProjectId: string | null;
+  onSelect: (projectId: string) => void;
+  loading: boolean;
+}) {
+  const selected = projects.find((project) => project.projectId === selectedProjectId);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="flex min-w-0 max-w-[52vw] items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted/40 md:max-w-[360px]">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-primary/15 text-primary">
+            <Rocket className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 truncate text-[13px] font-semibold">{selected?.name || 'All Projects'}</span>
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-[280px]">
+        <DropdownMenuLabel className="text-[11px] text-muted-foreground">Projects</DropdownMenuLabel>
+        {projects.length === 0 && <DropdownMenuItem disabled>No projects yet</DropdownMenuItem>}
+        {projects.map((project) => (
+          <DropdownMenuItem key={project.projectId} onClick={() => onSelect(project.projectId)}>
+            <span className="min-w-0 flex-1 truncate">{project.name}</span>
+            <span className="ml-2 truncate text-[11px] text-muted-foreground">{project.branch}</span>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/dashboard/deploy/new">
+            <Plus className="mr-2 h-3.5 w-3.5" />
+            Import Git Repository
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

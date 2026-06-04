@@ -11,13 +11,14 @@ export interface VercelProject {
 
 export interface VercelDeployment {
   uid: string;
+  id?: string;
   name: string;
   url: string;
   state: 'BUILDING' | 'READY' | 'ERROR' | 'CANCELED' | 'QUEUED' | 'INITIALIZING';
   target?: 'production' | 'preview' | null;
   created: number;
   ready?: number;
-  meta?: { githubCommitMessage?: string; githubCommitRef?: string };
+  meta?: { githubCommitMessage?: string; githubCommitRef?: string; githubCommitSha?: string };
   creator?: { username?: string };
   projectId?: string;
 }
@@ -25,7 +26,28 @@ export interface VercelDeployment {
 export interface VercelEvent {
   type: string;
   created: number;
-  payload?: { text?: string; info?: { type?: string } };
+  payload?: { text?: string; info?: { type?: string; name?: string; step?: string; path?: string }; statusCode?: number };
+}
+
+export interface VercelDomain {
+  name: string;
+  verified?: boolean;
+  apexName?: string;
+  projectId?: string;
+  redirect?: string | null;
+  gitBranch?: string | null;
+  updatedAt?: number;
+  createdAt?: number;
+}
+
+export interface VercelEnvVariable {
+  id: string;
+  key: string;
+  target?: string[];
+  type?: string;
+  configurationId?: string | null;
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export async function vercelOAuthExchange(code: string) {
@@ -64,19 +86,19 @@ export interface CreateProjectInput {
 export const vercel = {
   listProjects: () => vercelApi<{ projects: VercelProject[] }>('/v9/projects', { query: { limit: 50 } }),
   getProject: (id: string) => vercelApi<VercelProject>(`/v9/projects/${id}`),
-  listDeployments: (projectId?: string) =>
+  listDeployments: (projectId?: string, limit = 30) =>
     vercelApi<{ deployments: VercelDeployment[] }>('/v6/deployments', {
-      query: { limit: 30, ...(projectId ? { projectId } : {}) },
+      query: { limit, ...(projectId ? { projectId } : {}) },
     }),
   getDeployment: (id: string) => vercelApi<VercelDeployment>(`/v13/deployments/${id}`),
   getDeploymentEvents: (id: string) => vercelApi<VercelEvent[]>(`/v2/deployments/${id}/events`, { query: { limit: 200 } }),
   cancelDeployment: (id: string) => vercelApi(`/v12/deployments/${id}/cancel`, { method: 'PATCH' }),
   promoteDeployment: (projectId: string, deploymentId: string) =>
     vercelApi(`/v9/projects/${projectId}/promote/${deploymentId}`, { method: 'POST' }),
-  listDomains: (projectId: string) => vercelApi(`/v9/projects/${projectId}/domains`),
-  listEnv: (projectId: string) => vercelApi(`/v9/projects/${projectId}/env`),
+  listDomains: (projectId: string) => vercelApi<{ domains?: VercelDomain[] }>(`/v9/projects/${projectId}/domains`),
+  listEnv: (projectId: string) => vercelApi<{ envs?: VercelEnvVariable[]; env?: VercelEnvVariable[] }>(`/v9/projects/${projectId}/env`),
   createProject: (input: CreateProjectInput) => vercelApi<VercelProject>('/v9/projects', { method: 'POST', body: input }),
-  createDeployment: (input: { name: string; gitSource: { type: 'github'; repoId: number; ref: string }; projectSettings?: any; target?: 'production' }) =>
+  createDeployment: (input: { name: string; gitSource: { type: 'github'; repoId: number; ref: string }; projectSettings?: Record<string, unknown>; target?: 'production' }) =>
     vercelApi<VercelDeployment>('/v13/deployments', { method: 'POST', body: input }),
 };
 
