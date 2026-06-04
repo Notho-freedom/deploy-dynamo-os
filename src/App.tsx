@@ -15,6 +15,9 @@ import Builder from "./pages/dashboard/Builder.tsx";
 import UIGen from "./pages/dashboard/UIGen.tsx";
 import Backend from "./pages/dashboard/Backend.tsx";
 import Deploy from "./pages/dashboard/Deploy.tsx";
+import DeployNew from "./pages/dashboard/DeployNew.tsx";
+import DeployConfigure from "./pages/dashboard/DeployConfigure.tsx";
+import DeployDetail from "./pages/dashboard/DeployDetail.tsx";
 import Domains from "./pages/dashboard/Domains.tsx";
 import EmailSetup from "./pages/dashboard/EmailSetup.tsx";
 import CICD from "./pages/dashboard/CICD.tsx";
@@ -50,6 +53,9 @@ const App = () => {
                 <Route path="ui" element={<UIGen />} />
                 <Route path="backend" element={<Backend />} />
                 <Route path="deploy" element={<Deploy />} />
+                <Route path="deploy/new" element={<DeployNew />} />
+                <Route path="deploy/new/configure" element={<DeployConfigure />} />
+                <Route path="deploy/:projectId" element={<DeployDetail />} />
                 <Route path="domains" element={<Domains />} />
                 <Route path="email" element={<EmailSetup />} />
                 <Route path="cicd" element={<CICD />} />
