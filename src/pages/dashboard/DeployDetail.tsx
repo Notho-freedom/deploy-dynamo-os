@@ -137,8 +137,8 @@ export default function DeployDetail() {
           <div>
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Build Logs</p>
             <Terminal
-              lines={events.length === 0 ? [{ tone: 'muted', text: deployment.state === 'BUILDING' ? '— Waiting for build logs…' : '— No logs available.' }] : events.map((e) => ({
-                tone: e.payload?.info?.type === 'stderr' ? 'destructive' : 'muted',
+              lines={events.length === 0 ? [{ tone: 'muted' as const, text: deployment.state === 'BUILDING' ? '— Waiting for build logs…' : '— No logs available.' }] : events.map((e) => ({
+                tone: (e.payload?.info?.type === 'stderr' ? 'error' : 'muted') as 'error' | 'muted',
                 text: `[${new Date(e.created).toISOString().slice(11, 19)}] ${(e.payload?.text || '').replace(/\n+$/, '')}`,
               }))}
               streaming={deployment.state === 'BUILDING' || deployment.state === 'QUEUED' || deployment.state === 'INITIALIZING'}
