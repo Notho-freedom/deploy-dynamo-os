@@ -22,6 +22,12 @@ export interface VercelDeployment {
   projectId?: string;
 }
 
+export interface VercelEvent {
+  type: string;
+  created: number;
+  payload?: { text?: string; info?: { type?: string } };
+}
+
 export async function vercelOAuthExchange(code: string) {
   const { data, error } = await supabase.functions.invoke('vercel-oauth-callback', {
     body: { code, redirect_uri: `${window.location.origin}/integrations/vercel/callback` },
@@ -57,11 +63,13 @@ export interface CreateProjectInput {
 
 export const vercel = {
   listProjects: () => vercelApi<{ projects: VercelProject[] }>('/v9/projects', { query: { limit: 50 } }),
+  getProject: (id: string) => vercelApi<VercelProject>(`/v9/projects/${id}`),
   listDeployments: (projectId?: string) =>
     vercelApi<{ deployments: VercelDeployment[] }>('/v6/deployments', {
       query: { limit: 30, ...(projectId ? { projectId } : {}) },
     }),
   getDeployment: (id: string) => vercelApi<VercelDeployment>(`/v13/deployments/${id}`),
+  getDeploymentEvents: (id: string) => vercelApi<VercelEvent[]>(`/v2/deployments/${id}/events`, { query: { limit: 200 } }),
   cancelDeployment: (id: string) => vercelApi(`/v12/deployments/${id}/cancel`, { method: 'PATCH' }),
   promoteDeployment: (projectId: string, deploymentId: string) =>
     vercelApi(`/v9/projects/${projectId}/promote/${deploymentId}`, { method: 'POST' }),
@@ -71,3 +79,29 @@ export const vercel = {
   createDeployment: (input: { name: string; gitSource: { type: 'github'; repoId: number; ref: string }; projectSettings?: any; target?: 'production' }) =>
     vercelApi<VercelDeployment>('/v13/deployments', { method: 'POST', body: input }),
 };
+
+// Orchestrated end-to-end: create Vercel project + first deployment + record in user_projects.
+export interface DeployInput {
+  name: string;
+  repo_full_name: string;
+  repo_id: number;
+  branch: string;
+  framework: string;
+  rootDirectory?: string;
+  buildCommand?: string;
+  outputDirectory?: string;
+  installCommand?: string;
+  envs?: { key: string; value: string }[];
+}
+
+export async function createProjectAndDeploy(input: DeployInput): Promise<{
+  project_id: string;
+  project_name: string;
+  deployment_id: string;
+  deployment_url: string;
+}> {
+  const { data, error } = await supabase.functions.invoke('vercel-deploy', { body: input });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+  return data;
+}
