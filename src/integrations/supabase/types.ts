@@ -86,6 +86,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_projects: {
+        Row: {
+          branch: string
+          created_at: string
+          framework: string | null
+          github_repo_full_name: string
+          github_repo_id: number | null
+          id: string
+          production_url: string | null
+          updated_at: string
+          user_id: string
+          vercel_project_id: string
+          vercel_project_name: string
+        }
+        Insert: {
+          branch?: string
+          created_at?: string
+          framework?: string | null
+          github_repo_full_name: string
+          github_repo_id?: number | null
+          id?: string
+          production_url?: string | null
+          updated_at?: string
+          user_id: string
+          vercel_project_id: string
+          vercel_project_name: string
+        }
+        Update: {
+          branch?: string
+          created_at?: string
+          framework?: string | null
+          github_repo_full_name?: string
+          github_repo_id?: number | null
+          id?: string
+          production_url?: string | null
+          updated_at?: string
+          user_id?: string
+          vercel_project_id?: string
+          vercel_project_name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
