@@ -10,16 +10,19 @@ const ALLOWED = [
   /^\/v2\/user$/,
   /^\/v2\/teams$/,
   /^\/v9\/projects$/,                       // GET list, POST create
-  /^\/v9\/projects\/[^/]+$/,               // GET, PATCH, DELETE single
-  /^\/v6\/deployments$/,                   // GET list
-  /^\/v13\/deployments$/,                  // POST create
-  /^\/v13\/deployments\/[^/]+$/,           // GET single
+  /^\/v9\/projects\/[^/]+$/,                // GET, PATCH, DELETE single
+  /^\/v6\/deployments$/,                    // GET list
+  /^\/v13\/deployments$/,                   // POST create
+  /^\/v13\/deployments\/[^/]+$/,            // GET single
   /^\/v12\/deployments\/[^/]+\/cancel$/,
   /^\/v9\/projects\/[^/]+\/promote\/[^/]+$/,
   /^\/v2\/deployments\/[^/]+\/events$/,
+  /^\/v3\/deployments\/[^/]+\/events$/,
   /^\/v9\/projects\/[^/]+\/domains(\/[^/]+)?$/,
   /^\/v9\/projects\/[^/]+\/env(\/[^/]+)?$/,
 ];
+
+const VERCEL_MODE = (Deno.env.get('VERCEL_MODE') ?? 'admin') as 'admin' | 'oauth';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -40,16 +43,27 @@ Deno.serve(async (req) => {
     const pathOnly = path.split('?')[0];
     if (!ALLOWED.some((re) => re.test(pathOnly))) return json({ error: 'Path not allowed', path: pathOnly }, 403);
 
-    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: conn } = await admin
-      .from('connected_accounts')
-      .select('access_token, metadata')
-      .eq('user_id', user.id)
-      .eq('provider', 'vercel')
-      .maybeSingle();
-    if (!conn) return json({ error: 'Vercel not connected' }, 412);
+    let token: string | undefined;
+    let teamId: string | undefined;
 
-    const teamId = (conn.metadata?.team_id || conn.metadata?.teamId) as string | undefined;
+    if (VERCEL_MODE === 'admin') {
+      token = Deno.env.get('VERCEL_ADMIN_TOKEN') || undefined;
+      teamId = Deno.env.get('VERCEL_ADMIN_TEAM_ID') || undefined;
+      if (!token) return json({ error: 'VERCEL_ADMIN_TOKEN not set on server' }, 500);
+    } else {
+      // Legacy OAuth path — kept for later reactivation
+      const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: conn } = await admin
+        .from('connected_accounts')
+        .select('access_token, metadata')
+        .eq('user_id', user.id)
+        .eq('provider', 'vercel')
+        .maybeSingle();
+      if (!conn) return json({ error: 'Vercel not connected' }, 412);
+      token = conn.access_token;
+      teamId = (conn.metadata?.team_id || conn.metadata?.teamId) as string | undefined;
+    }
+
     const url = new URL(`https://api.vercel.com${path}`);
     if (query && typeof query === 'object') {
       for (const [k, v] of Object.entries(query)) {
@@ -60,7 +74,7 @@ Deno.serve(async (req) => {
 
     const r = await fetch(url.toString(), {
       method,
-      headers: { Authorization: `Bearer ${conn.access_token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: payload && method !== 'GET' ? JSON.stringify(payload) : undefined,
     });
     const text = await r.text();

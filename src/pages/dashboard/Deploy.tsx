@@ -1,195 +1,137 @@
-import { useEffect, useRef, useState } from 'react';
-import { useApp } from '@/lib/store';
-import { useI18n } from '@/lib/i18n';
-import { Stepper } from '@/components/Stepper';
-import { Terminal, TerminalLine } from '@/components/Terminal';
-import { StatusDot } from '@/components/StatusDot';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { vercel, VercelDeployment } from '@/lib/vercel';
 import { Button } from '@/components/ui/button';
-import { VercelLivePanel } from '@/components/VercelLivePanel';
-import { Rocket, GitCommit, ExternalLink, RefreshCw, ChevronRight, RotateCcw } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
+import { Plus, Rocket, Github, ExternalLink, GitBranch, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
-const buildSteps = [
-  { key: 'queued', label: 'Queued', d: 400 },
-  { key: 'cloning', label: 'Cloning repository', d: 1200 },
-  { key: 'install', label: 'Installing dependencies', d: 6800 },
-  { key: 'detect', label: 'Detected Next.js 14 · pnpm', d: 300 },
-  { key: 'build', label: 'Running pnpm build', d: 12400 },
-  { key: 'compile', label: 'Compiled successfully', d: 200 },
-  { key: 'optimize', label: 'Optimizing static assets', d: 1700 },
-  { key: 'upload', label: 'Uploading to global CDN (12 regions)', d: 3200 },
-  { key: 'edge', label: 'Provisioning edge functions', d: 900 },
-  { key: 'ready', label: 'Deployment ready', d: 200 },
-];
+interface UserProject {
+  id: string;
+  vercel_project_id: string;
+  vercel_project_name: string;
+  github_repo_full_name: string;
+  branch: string;
+  framework: string | null;
+  production_url: string | null;
+  created_at: string;
+}
+
+const STATE_COLOR: Record<string, string> = {
+  READY: 'text-success border-success/40 bg-success/10',
+  BUILDING: 'text-primary border-primary/40 bg-primary/10',
+  QUEUED: 'text-muted-foreground border-border bg-muted/30',
+  INITIALIZING: 'text-primary border-primary/40 bg-primary/10',
+  ERROR: 'text-destructive border-destructive/40 bg-destructive/10',
+  CANCELED: 'text-muted-foreground border-border bg-muted/30',
+};
 
 export default function Deploy() {
-  const { projects, deployments, addDeployment, updateDeployment } = useApp();
-  const { lang } = useI18n();
-  const [selected, setSelected] = useState(projects[0]?.id);
-  const [logs, setLogs] = useState<TerminalLine[]>([]);
-  const [stepIdx, setStepIdx] = useState(0);
-  const [building, setBuilding] = useState(false);
-  const [tab, setTab] = useState<'deployment' | 'source' | 'functions' | 'logs'>('deployment');
-  const timers = useRef<number[]>([]);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<UserProject[]>([]);
+  const [latest, setLatest] = useState<Record<string, VercelDeployment | null>>({});
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
-
-  const project = projects.find((p) => p.id === selected);
-  const projDeployments = deployments.filter((d) => d.projectId === selected);
-  const current = projDeployments[0];
-
-  const start = () => {
-    if (!project) return;
-    setLogs([]);
-    setStepIdx(0);
-    setBuilding(true);
-    setTab('deployment');
-    const url = `${project.name}-${Math.random().toString(36).slice(2, 6)}.nebula.app`;
-    const dpl = addDeployment({ projectId: selected, url, state: 'BUILDING', commit: 'feat: ship updates' });
-
-    let acc = 0;
-    buildSteps.forEach((s, i) => {
-      acc += s.d;
-      timers.current.push(window.setTimeout(() => {
-        setStepIdx(i + 1);
-        setLogs((prev) => [
-          ...prev,
-          { tone: 'muted', text: `[${new Date().toISOString().slice(11, 23)}]  ${s.label}` },
-        ]);
-        if (i === buildSteps.length - 1) {
-          setBuilding(false);
-          updateDeployment(dpl.uid, { state: 'READY', duration: Math.round(acc / 1000) });
-        }
-      }, acc));
-    });
-  };
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    supabase
+      .from('user_projects')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        const list = (data || []) as UserProject[];
+        setProjects(list);
+        setLoading(false);
+        // Fetch latest deployment per project (in parallel, fire and forget)
+        list.forEach(async (p) => {
+          const r = await vercel.listDeployments(p.vercel_project_id).catch(() => ({ deployments: [] as VercelDeployment[] }));
+          setLatest((prev) => ({ ...prev, [p.vercel_project_id]: r.deployments?.[0] || null }));
+        });
+      });
+  }, [user]);
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-end justify-between gap-4">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Deployment</p>
-          <h1 className="font-editorial text-4xl tracking-tight">{lang === 'fr' ? <>Pipeline & <em className="italic text-muted-foreground">historique</em></> : <>Pipeline & <em className="italic text-muted-foreground">history</em></>}</h1>
+          <h1 className="font-editorial text-4xl tracking-tight">
+            Your <em className="italic text-muted-foreground">projects</em>
+          </h1>
         </div>
-        <Button onClick={start} disabled={building} className="gap-2">
-          {building ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-          {building ? (lang === 'fr' ? 'Déploiement…' : 'Deploying…') : (lang === 'fr' ? 'Déployer' : 'Deploy')}
+        <Button onClick={() => navigate('/dashboard/deploy/new')} className="gap-2">
+          <Plus className="h-3.5 w-3.5" /> New Project
         </Button>
       </div>
 
-      {/* Live Vercel data (real API) */}
-      <section>
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3 font-mono">Live · Vercel</p>
-        <VercelLivePanel />
-      </section>
-
-
-      {/* Project selector ribbon */}
-      <div className="border-y border-border flex divide-x divide-border overflow-x-auto">
-        {projects.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setSelected(p.id)}
-            className={`px-4 py-2.5 text-[12px] font-mono transition shrink-0 ${selected === p.id ? 'text-foreground bg-muted/40' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {p.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Active deployment header */}
-      {current && (
-        <div className="border border-border p-5">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-[12px]">
-              <StatusDot tone={current.state === 'READY' ? 'success' : current.state === 'BUILDING' ? 'warning' : 'destructive'} pulse={current.state === 'BUILDING'} />
-              {current.state}
-            </span>
-            <a href={`https://${current.url}`} target="_blank" rel="noreferrer" className="font-mono text-[13px] text-foreground hover:text-primary inline-flex items-center gap-1.5">
-              {current.url} <ExternalLink className="h-3 w-3" />
-            </a>
-            <span className="text-[11px] font-mono text-muted-foreground flex items-center gap-1.5"><GitCommit className="h-3 w-3" /> {current.commit ?? 'main@a8f2c1d'}</span>
-            <span className="text-[11px] font-mono text-muted-foreground">main</span>
-            <span className="text-[11px] font-mono text-muted-foreground tabular-nums">{current.duration ?? 0}s</span>
-            <span className="text-[11px] font-mono text-muted-foreground ml-auto">{formatDistanceToNow(current.createdAt, { addSuffix: true })}</span>
-          </div>
-
-          {/* Tabs */}
-          <div className="mt-5 border-b border-border flex gap-1 -mb-5">
-            {(['deployment', 'source', 'functions', 'logs'] as const).map((tk) => (
-              <button
-                key={tk}
-                onClick={() => setTab(tk)}
-                className={`px-3 py-2 text-[12px] capitalize border-b-2 -mb-px transition ${tab === tk ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-              >
-                {tk}
-              </button>
-            ))}
-          </div>
+      {loading ? (
+        <div className="border border-border rounded-md p-12 text-center text-[13px] text-muted-foreground inline-flex items-center gap-2 justify-center w-full">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading projects…
         </div>
-      )}
-
-      {/* Body */}
-      <div className="grid lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-4 border border-border p-5">
-          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-4">{lang === 'fr' ? 'Étapes du build' : 'Build steps'}</p>
-          <Stepper
-            current={stepIdx}
-            steps={buildSteps.map((s, i) => ({
-              label: s.label,
-              duration: i < stepIdx ? `${(s.d / 1000).toFixed(1)}s` : i === stepIdx && building ? '…' : '—',
-            }))}
+      ) : projects.length === 0 ? (
+        <div className="border border-border rounded-md">
+          <EmptyState
+            icon={<Rocket className="h-10 w-10" />}
+            title="No projects yet"
+            description="Import a GitHub repository to ship your first deployment."
+            action={
+              <Button onClick={() => navigate('/dashboard/deploy/new')} className="gap-2">
+                <Plus className="h-3.5 w-3.5" /> Import a repository
+              </Button>
+            }
           />
         </div>
-        <div className="lg:col-span-8">
-          <Terminal lines={logs.length ? logs : [{ tone: 'muted', text: lang === 'fr' ? '— En attente d\'un build. Cliquez Déployer pour démarrer.' : '— Waiting for a build. Click Deploy to start.' }]} streaming={building} prompt={`build · ${project?.name ?? ''}`} height="h-[380px]" />
-        </div>
-      </div>
-
-      {/* History */}
-      <div>
-        <h2 className="text-[13px] uppercase tracking-widest text-muted-foreground mb-3">{lang === 'fr' ? 'Historique' : 'History'}</h2>
-        <div className="border border-border">
-          <table className="w-full">
-            <thead className="border-b border-border">
-              <tr className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                <th className="text-left font-normal px-4 py-2.5">Status</th>
-                <th className="text-left font-normal px-4 py-2.5">URL</th>
-                <th className="text-left font-normal px-4 py-2.5">Commit</th>
-                <th className="text-left font-normal px-4 py-2.5">Branch</th>
-                <th className="text-right font-normal px-4 py-2.5">Duration</th>
-                <th className="text-right font-normal px-4 py-2.5">Created</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {projDeployments.map((d) => (
-                <tr key={d.uid} className="hover:bg-muted/30 transition">
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-[12px]">
-                      <StatusDot tone={d.state === 'READY' ? 'success' : d.state === 'BUILDING' ? 'warning' : 'destructive'} />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {projects.map((p) => {
+            const d = latest[p.vercel_project_id];
+            return (
+              <Link
+                key={p.id}
+                to={`/dashboard/deploy/${p.vercel_project_id}`}
+                className="border border-border rounded-md p-5 hover:border-foreground/40 transition group flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-editorial text-lg truncate">{p.vercel_project_name}</h3>
+                    <p className="text-[11px] font-mono text-muted-foreground truncate inline-flex items-center gap-1">
+                      <Github className="h-3 w-3" /> {p.github_repo_full_name}
+                    </p>
+                  </div>
+                  {d && (
+                    <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-mono uppercase rounded border ${STATE_COLOR[d.state] || ''}`}>
                       {d.state}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-[12px] truncate max-w-xs">{d.url}</td>
-                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{d.commit ?? '—'}</td>
-                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">main</td>
-                  <td className="px-4 py-3 text-right font-mono text-[12px] tabular-nums text-muted-foreground">{d.duration ?? '—'}s</td>
-                  <td className="px-4 py-3 text-right font-mono text-[11px] text-muted-foreground">{formatDistanceToNow(d.createdAt, { addSuffix: false })}</td>
-                  <td className="px-4 py-3 text-right">
-                    {d.state === 'READY' && (
-                      <button title="Promote to production" className="text-muted-foreground hover:text-foreground">
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+
+                {d?.url && (
+                  <a
+                    href={`https://${d.url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[12px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 truncate"
+                  >
+                    {d.url} <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                )}
+
+                <div className="flex items-center justify-between text-[10.5px] font-mono text-muted-foreground mt-auto pt-2 border-t border-border">
+                  <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" /> {p.branch}</span>
+                  <span>{p.framework || 'static'}</span>
+                  <span>{formatDistanceToNow(new Date(d?.created || p.created_at), { addSuffix: true })}</span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
   );
 }
