@@ -9,17 +9,26 @@ const corsHeaders = {
 const ALLOWED = [
   /^\/v2\/user$/,
   /^\/v2\/teams$/,
-  /^\/v9\/projects$/,                       // GET list, POST create
-  /^\/v9\/projects\/[^/]+$/,                // GET, PATCH, DELETE single
-  /^\/v6\/deployments$/,                    // GET list
-  /^\/v13\/deployments$/,                   // POST create
-  /^\/v13\/deployments\/[^/]+$/,            // GET single
+  /^\/v9\/projects$/,
+  /^\/v9\/projects\/[^/]+$/,
+  /^\/v6\/deployments$/,
+  /^\/v13\/deployments$/,
+  /^\/v13\/deployments\/[^/]+$/,
   /^\/v12\/deployments\/[^/]+\/cancel$/,
   /^\/v9\/projects\/[^/]+\/promote\/[^/]+$/,
   /^\/v2\/deployments\/[^/]+\/events$/,
   /^\/v3\/deployments\/[^/]+\/events$/,
   /^\/v9\/projects\/[^/]+\/domains(\/[^/]+)?$/,
   /^\/v9\/projects\/[^/]+\/env(\/[^/]+)?$/,
+  /^\/v10\/projects\/[^/]+\/env$/,
+  /^\/v5\/domains\/[^/]+$/,
+  /^\/v4\/domains\/[^/]+\/records$/,
+  /^\/v2\/domains\/[^/]+\/records(\/[^/]+)?$/,
+  /^\/v4\/domains\/[^/]+\/certs$/,
+  /^\/v4\/domains$/,
+  /^\/v1\/projects\/[^/]+\/analytics$/,
+  /^\/v1\/projects\/[^/]+\/logs$/,
+  /^\/v1\/usage\/.+$/,
 ];
 
 const VERCEL_MODE = (Deno.env.get('VERCEL_MODE') ?? 'admin') as 'admin' | 'oauth';
@@ -33,7 +42,7 @@ Deno.serve(async (req) => {
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: auth } } }
+      { global: { headers: { Authorization: auth } } },
     );
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return json({ error: 'Unauthorized' }, 401);
@@ -51,7 +60,6 @@ Deno.serve(async (req) => {
       teamId = Deno.env.get('VERCEL_ADMIN_TEAM_ID') || undefined;
       if (!token) return json({ error: 'VERCEL_ADMIN_TOKEN not set on server' }, 500);
     } else {
-      // Legacy OAuth path — kept for later reactivation
       const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
       const { data: conn } = await admin
         .from('connected_accounts')

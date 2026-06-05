@@ -19,9 +19,12 @@ import DeployNew from "./pages/dashboard/DeployNew.tsx";
 import DeployConfigure from "./pages/dashboard/DeployConfigure.tsx";
 import DeployDetail from "./pages/dashboard/DeployDetail.tsx";
 import Domains from "./pages/dashboard/Domains.tsx";
+import DomainDetail from "./pages/dashboard/DomainDetail.tsx";
 import EmailSetup from "./pages/dashboard/EmailSetup.tsx";
 import CICD from "./pages/dashboard/CICD.tsx";
-import Monitoring from "./pages/dashboard/Monitoring.tsx";
+import Logs from "./pages/dashboard/Logs.tsx";
+import Analytics from "./pages/dashboard/Analytics.tsx";
+import Observability from "./pages/dashboard/Observability.tsx";
 import Billing from "./pages/dashboard/Billing.tsx";
 import Settings from "./pages/dashboard/Settings.tsx";
 import VercelCallback from "./pages/integrations/VercelCallback.tsx";
@@ -57,9 +60,13 @@ const App = () => {
                 <Route path="deploy/new/configure" element={<DeployConfigure />} />
                 <Route path="deploy/:projectId" element={<DeployDetail />} />
                 <Route path="domains" element={<Domains />} />
+                <Route path="domains/:domain" element={<DomainDetail />} />
                 <Route path="email" element={<EmailSetup />} />
                 <Route path="cicd" element={<CICD />} />
-                <Route path="monitoring" element={<Monitoring />} />
+                <Route path="logs" element={<Logs />} />
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="observability" element={<Observability />} />
+                <Route path="monitoring" element={<Observability />} />
                 <Route path="billing" element={<Billing />} />
                 <Route path="settings" element={<Settings />} />
               </Route>

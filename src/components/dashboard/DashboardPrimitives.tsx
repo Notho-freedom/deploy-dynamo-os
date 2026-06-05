@@ -16,10 +16,10 @@ import {
   Search,
   XCircle,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, safeFormatDistance, shortDeploymentId } from '@/lib/utils';
 import { DashboardProject, DeploymentRow } from '@/hooks/useDashboardData';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function DashboardToolbar({
   eyebrow,
@@ -129,17 +129,22 @@ export function SectionPanel({
   meta,
   children,
   className,
+  actions,
 }: {
   title: string;
   meta?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  actions?: React.ReactNode;
 }) {
   return (
     <section className={cn('overflow-hidden rounded-md border border-border bg-card', className)}>
       <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border px-4 py-2">
         <h2 className="text-[12px] font-medium">{title}</h2>
-        {meta && <div className="text-[11px] text-muted-foreground">{meta}</div>}
+        <div className="flex items-center gap-2">
+          {meta && <div className="text-[11px] text-muted-foreground">{meta}</div>}
+          {actions}
+        </div>
       </div>
       {children}
     </section>
@@ -163,6 +168,22 @@ export function DeploymentStatusBadge({ state }: { state: DeploymentRow['state']
       <Icon className="h-3.5 w-3.5" />
       {state === 'READY' ? 'Ready' : state.charAt(0) + state.slice(1).toLowerCase()}
     </span>
+  );
+}
+
+export function TruncatedText({ text, lines = 2, className }: { text: string; lines?: 1 | 2 | 3; className?: string }) {
+  const clampClass = lines === 1 ? 'line-clamp-1' : lines === 2 ? 'line-clamp-2' : 'line-clamp-3';
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={cn(clampClass, 'block break-words text-left', className)}>{text}</span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-md whitespace-pre-wrap text-[12px]">
+          {text}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -196,7 +217,7 @@ export function ProjectCard({ project }: { project: DashboardProject }) {
           <span className="truncate">{deployment?.meta?.githubCommitRef || project.branch}</span>
         </span>
         <span className="shrink-0">
-          {deployment ? formatDistanceToNow(deployment.created, { addSuffix: true }) : formatDistanceToNow(new Date(project.createdAt), { addSuffix: true })}
+          {safeFormatDistance(deployment?.created ?? project.createdAt, { addSuffix: true })}
         </span>
       </div>
     </Link>
@@ -226,40 +247,73 @@ export function DeploymentTable({ rows, loading }: { rows: DeploymentRow[]; load
   return (
     <div className="overflow-hidden rounded-md border border-border bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] text-[13px]">
+        <table className="w-full min-w-[1080px] table-fixed text-[13px]">
+          <colgroup>
+            <col style={{ width: '160px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '110px' }} />
+            <col />
+            <col style={{ width: '200px' }} />
+            <col style={{ width: '140px' }} />
+            <col style={{ width: '90px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '52px' }} />
+          </colgroup>
+          <thead className="border-b border-border bg-muted/20 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2.5 text-left font-medium">Deployment</th>
+              <th className="px-4 py-2.5 text-left font-medium">Status</th>
+              <th className="px-4 py-2.5 text-left font-medium">Env</th>
+              <th className="px-4 py-2.5 text-left font-medium">Commit</th>
+              <th className="px-4 py-2.5 text-left font-medium">Project</th>
+              <th className="px-4 py-2.5 text-left font-medium">Branch</th>
+              <th className="px-4 py-2.5 text-left font-medium">SHA</th>
+              <th className="px-4 py-2.5 text-right font-medium">Created</th>
+              <th className="px-2 py-2.5" />
+            </tr>
+          </thead>
           <tbody className="divide-y divide-border">
             {rows.map((row) => (
               <tr key={`${row.projectId}-${row.uid}`} className="transition hover:bg-muted/30">
-                <td className="w-[36%] px-4 py-3">
-                  <Link to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="font-medium hover:text-primary">
-                    {row.message}
+                <td className="px-4 py-3 align-top">
+                  <Link to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="font-mono text-[12px] text-foreground hover:text-primary">
+                    {shortDeploymentId(row.uid)}
                   </Link>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-top">
                   <DeploymentStatusBadge state={row.state} />
-                  {row.duration !== null && <span className="ml-2 text-[12px] text-muted-foreground">{row.duration}s</span>}
+                  {row.duration !== null && <span className="ml-2 text-[11px] text-muted-foreground">{row.duration}s</span>}
                 </td>
-                <td className="px-4 py-3">
-                  <span className={cn('rounded-full border px-2 py-0.5 text-[12px]', row.environment === 'Production' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground')}>
+                <td className="px-4 py-3 align-top">
+                  <span className={cn('rounded-full border px-2 py-0.5 text-[11px]', row.environment === 'Production' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground')}>
                     {row.environment}
                   </span>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="max-w-[220px] truncate font-medium">{row.projectName}</div>
-                  <div className="max-w-[220px] truncate text-[11px] text-muted-foreground">{row.repo}</div>
+                <td className="px-4 py-3 align-top">
+                  <Link to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="block hover:text-primary">
+                    <TruncatedText text={row.message} lines={2} className="text-[13px] font-medium" />
+                  </Link>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <GitBranch className="h-3.5 w-3.5" />
-                    {row.branch}
+                <td className="px-4 py-3 align-top">
+                  <div className="truncate font-medium">{row.projectName}</div>
+                  <div className="truncate text-[11px] text-muted-foreground">{row.repo}</div>
+                </td>
+                <td className="px-4 py-3 align-top text-muted-foreground">
+                  <span className="inline-flex max-w-full items-center gap-1 truncate">
+                    <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{row.branch}</span>
                   </span>
                 </td>
-                <td className="px-4 py-3 font-mono text-[12px] text-muted-foreground">{row.commitSha}</td>
-                <td className="px-4 py-3 text-right text-[12px] text-muted-foreground">{formatDistanceToNow(row.created, { addSuffix: true })}</td>
-                <td className="px-4 py-3 text-right">
-                  <a href={`https://${row.url}`} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground">
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                <td className="px-4 py-3 align-top font-mono text-[12px] text-muted-foreground">{row.commitSha}</td>
+                <td className="px-4 py-3 align-top text-right text-[12px] text-muted-foreground">
+                  {safeFormatDistance(row.created, { addSuffix: true })}
+                </td>
+                <td className="px-2 py-3 align-top text-right">
+                  {row.url && (
+                    <a href={`https://${row.url}`} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground" aria-label="Open deployment">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
                 </td>
               </tr>
             ))}
@@ -271,37 +325,29 @@ export function DeploymentTable({ rows, loading }: { rows: DeploymentRow[]; load
 }
 
 export function CodeViewer({ filename, code, actions }: { filename: string; code: string; actions?: React.ReactNode }) {
-  const lines = code.split('\n');
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-[#080809]">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+    <div className="overflow-hidden rounded-md border border-border bg-[#1e1e1e]">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-[#181818] px-4 py-2.5">
         <div className="inline-flex min-w-0 items-center gap-2">
           <FileCode2 className="h-4 w-4 text-muted-foreground" />
           <span className="truncate text-[13px] font-semibold">{filename}</span>
         </div>
         <div className="flex items-center gap-1">
           {actions}
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => void navigator.clipboard.writeText(code)}
-            aria-label="Copy source"
-          >
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => void navigator.clipboard.writeText(code)} aria-label="Copy source">
             <Copy className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
-      <pre className="max-h-[calc(100vh-220px)] overflow-auto p-0 text-[12.5px] leading-6">
-        {lines.map((line, index) => (
-          <div key={index} className="grid grid-cols-[48px_1fr] border-b border-border/30 last:border-0">
-            <span className="select-none border-r border-border/60 px-3 text-right font-mono text-muted-foreground">{index + 1}</span>
-            <code className="whitespace-pre px-4 font-mono text-foreground/90">{line || ' '}</code>
-          </div>
-        ))}
-      </pre>
+      <SyntaxBlock code={code} filename={filename} />
     </div>
   );
+}
+
+// Lazy local wrapper so a missing prism doesn't crash the rest of the dashboard.
+import { SyntaxHighlighter } from '@/components/SyntaxHighlighter';
+function SyntaxBlock({ code, filename }: { code: string; filename: string }) {
+  return <SyntaxHighlighter code={code} filename={filename} className="max-h-[calc(100vh-220px)]" />;
 }
 
 export function ExternalTextLink({ href, children }: { href: string; children: React.ReactNode }) {

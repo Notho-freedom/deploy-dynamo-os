@@ -2,3 +2,6 @@ project_id = "mofayzjsfskzrkmxueqh"
 
 [functions.oauth-start]
 verify_jwt = false
+
+[functions.vercel-logs-stream]
+verify_jwt = false
