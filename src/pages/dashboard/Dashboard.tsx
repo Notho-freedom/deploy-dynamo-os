@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
 import { AlertCircle, Clock3, GitBranch, LayoutGrid, Plus, Rocket } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { DashboardToolbar, EmptyPanel, ProjectCard, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
 import { useDashboardProjects, useRecentDeployments } from '@/hooks/useDashboardData';
+import { safeFormatDistance } from '@/lib/utils';
 
 export default function Dashboard() {
   const { projects, rawProjects, loading, error } = useDashboardProjects();
@@ -61,7 +61,7 @@ export default function Dashboard() {
                     to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`}
                     className="block px-4 py-3 transition hover:bg-muted/30"
                   >
-                    <p className="truncate text-[13px] font-medium">{row.message}</p>
+                    <p className="line-clamp-2 text-[13px] font-medium">{row.message}</p>
                     <div className="mt-1 flex items-center gap-2 text-[12px] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <GitBranch className="h-3.5 w-3.5" />
@@ -141,9 +141,9 @@ export default function Dashboard() {
                   .slice(0, 6)
                   .map((row) => (
                     <Link key={row.uid} to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="grid gap-3 px-4 py-3 transition hover:bg-muted/30 md:grid-cols-[1fr_160px_120px]">
-                      <span className="truncate text-[13px] font-medium">{row.message}</span>
+                      <span className="line-clamp-1 text-[13px] font-medium">{row.message}</span>
                       <span className="truncate text-[12px] text-muted-foreground">{row.projectName}</span>
-                      <span className="text-right text-[12px] text-muted-foreground">{formatDistanceToNow(row.created, { addSuffix: true })}</span>
+                      <span className="text-right text-[12px] text-muted-foreground">{safeFormatDistance(row.created, { addSuffix: true })}</span>
                     </Link>
                   ))}
               </div>

@@ -132,9 +132,7 @@ export default function DeployDetail() {
       } finally {
         if (active) setLoading(false);
       }
-      void record;
     }
-    let record: unknown;
     void init();
     return () => {
       active = false;

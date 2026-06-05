@@ -54,7 +54,7 @@ export default function DomainDetail() {
   return (
     <div>
       <DashboardToolbar
-        eyebrow={<Link to="/dashboard/domains" className="hover:text-foreground">Domains</Link> as unknown as string}
+        eyebrow="Domains"
         title={domain || 'Domain'}
         subtitle="DNS records, nameservers, and SSL certificates."
         actions={
