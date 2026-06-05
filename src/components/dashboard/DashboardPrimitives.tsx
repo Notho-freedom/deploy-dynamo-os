@@ -339,7 +339,6 @@ export function CodeViewer({ filename, code, actions }: { filename: string; code
           </Button>
         </div>
       </div>
-      {/* @ts-expect-error dynamic import inline */}
       <SyntaxBlock code={code} filename={filename} />
     </div>
   );
