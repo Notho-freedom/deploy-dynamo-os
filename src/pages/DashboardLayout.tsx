@@ -47,9 +47,9 @@ interface NavItem {
 const productNav: NavItem[] = [
   { to: '/dashboard', label: 'Projects', icon: LayoutGrid, end: true },
   { to: '/dashboard/deploy', label: 'Deployments', icon: Box },
-  { to: '/dashboard/monitoring', label: 'Logs', icon: List },
-  { to: '/dashboard/monitoring', label: 'Analytics', icon: Activity },
-  { to: '/dashboard/monitoring', label: 'Observability', icon: Zap },
+  { to: '/dashboard/logs', label: 'Logs', icon: List },
+  { to: '/dashboard/analytics', label: 'Analytics', icon: Activity },
+  { to: '/dashboard/observability', label: 'Observability', icon: Zap },
   { to: '/dashboard/backend', label: 'Storage', icon: Database },
   { to: '/dashboard/cicd', label: 'Integrations', icon: GitBranch },
 ];

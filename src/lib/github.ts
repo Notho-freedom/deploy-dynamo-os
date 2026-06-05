@@ -15,6 +15,8 @@ export interface GhRepo {
 
 export interface GhOrg { login: string; avatar_url: string; id: number }
 export interface GhBranch { name: string; commit: { sha: string } }
+export interface GhTreeEntry { path: string; mode: string; type: 'blob' | 'tree' | 'commit'; sha: string; size?: number; url?: string }
+export interface GhTree { sha: string; tree: GhTreeEntry[]; truncated: boolean }
 
 export async function ghApi<T = any>(path: string, opts: { method?: string; query?: Record<string, any>; body?: any } = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke('github-api', {
@@ -32,9 +34,13 @@ export const github = {
   myOrgs: () => ghApi<GhOrg[]>('/user/orgs', { query: { per_page: 50 } }),
   branches: (owner: string, repo: string) => ghApi<GhBranch[]>(`/repos/${owner}/${repo}/branches`, { query: { per_page: 50 } }),
   repo: (owner: string, repo: string) => ghApi<GhRepo>(`/repos/${owner}/${repo}`),
-  // Read a file from the default branch (base64-encoded content)
-  repoFile: (owner: string, repo: string, path: string) =>
-    ghApi<{ content: string; encoding: string }>(`/repos/${owner}/${repo}/contents/${path}`),
+  repoFile: (owner: string, repo: string, path: string, ref?: string) =>
+    ghApi<{ content: string; encoding: string; sha: string; size: number; name: string; path: string }>(
+      `/repos/${owner}/${repo}/contents/${path}`,
+      { query: ref ? { ref } : undefined },
+    ),
+  repoTree: (owner: string, repo: string, ref: string) =>
+    ghApi<GhTree>(`/repos/${owner}/${repo}/git/trees/${ref}`, { query: { recursive: 1 } }),
 };
 
 export async function readPackageJson(owner: string, repo: string): Promise<any | null> {
@@ -60,6 +66,16 @@ export function detectFramework(pkg: any): { framework: string; build: string; o
   if (deps['vite']) return { framework: 'vite', build, output: 'dist', install };
   if (deps['react-scripts']) return { framework: 'create-react-app', build, output: 'build', install };
   return { framework: '', build, output: 'dist', install };
+}
+
+export function decodeBase64Utf8(b64: string): string {
+  try {
+    const bin = atob(b64.replace(/\n/g, ''));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return '';
+  }
 }
 
 // Legacy OAuth flows kept for future reactivation behind feature flag.

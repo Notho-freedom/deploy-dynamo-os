@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Globe, Loader2, Search } from 'lucide-react';
 import { DashboardToolbar, EmptyPanel, FilterBar, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
 import { useUserProjects, UserProjectRecord } from '@/hooks/useDashboardData';
 import { vercel, VercelDomain } from '@/lib/vercel';
-import { cn } from '@/lib/utils';
+import { cn, safeDateString } from '@/lib/utils';
 
 interface DomainRow extends VercelDomain {
   projectName: string;
@@ -114,7 +115,11 @@ export default function Domains() {
                 <tbody className="divide-y divide-border">
                   {filtered.map((domain) => (
                     <tr key={`${domain.projectId}-${domain.name}`} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{domain.name}</td>
+                      <td className="px-4 py-3">
+                        <Link to={`/dashboard/domains/${encodeURIComponent(domain.name)}`} className="font-medium hover:text-primary">
+                          {domain.name}
+                        </Link>
+                      </td>
                       <td className="px-4 py-3 text-muted-foreground">{domain.projectName}</td>
                       <td className="px-4 py-3">
                         <span className={cn('rounded-full border px-2 py-0.5 text-[12px]', domain.verified ? 'border-success/30 bg-success/10 text-success' : 'border-warning/30 bg-warning/10 text-warning')}>
@@ -122,7 +127,7 @@ export default function Domains() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{domain.gitBranch || 'Production'}</td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">{domain.updatedAt ? new Date(domain.updatedAt).toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{safeDateString(domain.updatedAt)}</td>
                     </tr>
                   ))}
                 </tbody>
