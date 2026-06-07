@@ -86,6 +86,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_backend_services: {
+        Row: {
+          branch: string | null
+          created_at: string
+          github_repo_full_name: string | null
+          id: string
+          kind: string
+          plan: string | null
+          region: string | null
+          render_service_id: string
+          render_service_name: string
+          service_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          branch?: string | null
+          created_at?: string
+          github_repo_full_name?: string | null
+          id?: string
+          kind: string
+          plan?: string | null
+          region?: string | null
+          render_service_id: string
+          render_service_name: string
+          service_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          branch?: string | null
+          created_at?: string
+          github_repo_full_name?: string | null
+          id?: string
+          kind?: string
+          plan?: string | null
+          region?: string | null
+          render_service_id?: string
+          render_service_name?: string
+          service_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_projects: {
         Row: {
           branch: string
