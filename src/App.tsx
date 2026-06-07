@@ -14,6 +14,9 @@ import Dashboard from "./pages/dashboard/Dashboard.tsx";
 import Builder from "./pages/dashboard/Builder.tsx";
 import UIGen from "./pages/dashboard/UIGen.tsx";
 import Backend from "./pages/dashboard/Backend.tsx";
+import BackendNew from "./pages/dashboard/BackendNew.tsx";
+import BackendServiceDetail from "./pages/dashboard/BackendServiceDetail.tsx";
+import BackendDatabaseDetail from "./pages/dashboard/BackendDatabaseDetail.tsx";
 import Deploy from "./pages/dashboard/Deploy.tsx";
 import DeployNew from "./pages/dashboard/DeployNew.tsx";
 import DeployConfigure from "./pages/dashboard/DeployConfigure.tsx";
@@ -55,6 +58,9 @@ const App = () => {
                 <Route path="builder" element={<Builder />} />
                 <Route path="ui" element={<UIGen />} />
                 <Route path="backend" element={<Backend />} />
+                <Route path="backend/new" element={<BackendNew />} />
+                <Route path="backend/service/:serviceId" element={<BackendServiceDetail />} />
+                <Route path="backend/database/:dbId" element={<BackendDatabaseDetail />} />
                 <Route path="deploy" element={<Deploy />} />
                 <Route path="deploy/new" element={<DeployNew />} />
                 <Route path="deploy/new/configure" element={<DeployConfigure />} />
