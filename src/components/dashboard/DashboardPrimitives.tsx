@@ -151,22 +151,24 @@ export function SectionPanel({
   );
 }
 
-export function DeploymentStatusBadge({ state }: { state: DeploymentRow['state'] }) {
-  const icon = state === 'READY' ? CheckCircle2 : state === 'ERROR' ? XCircle : state === 'CANCELED' ? Circle : Clock3;
+export function DeploymentStatusBadge({ state }: { state: DeploymentRow['state'] | string | undefined | null }) {
+  const safe = (typeof state === 'string' && state.length > 0 ? state : 'QUEUED').toUpperCase();
+  const icon = safe === 'READY' ? CheckCircle2 : safe === 'ERROR' ? XCircle : safe === 'CANCELED' ? Circle : Clock3;
   const Icon = icon;
+  const label = safe === 'READY' ? 'Ready' : safe.charAt(0) + safe.slice(1).toLowerCase();
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[12px] font-medium',
-        state === 'READY' && 'border-success/30 bg-success/10 text-success',
-        (state === 'BUILDING' || state === 'INITIALIZING') && 'border-primary/30 bg-primary/10 text-primary',
-        state === 'QUEUED' && 'border-border bg-muted/40 text-muted-foreground',
-        state === 'ERROR' && 'border-destructive/30 bg-destructive/10 text-destructive',
-        state === 'CANCELED' && 'border-border bg-muted/40 text-muted-foreground',
+        safe === 'READY' && 'border-success/30 bg-success/10 text-success',
+        (safe === 'BUILDING' || safe === 'INITIALIZING') && 'border-primary/30 bg-primary/10 text-primary',
+        safe === 'QUEUED' && 'border-border bg-muted/40 text-muted-foreground',
+        safe === 'ERROR' && 'border-destructive/30 bg-destructive/10 text-destructive',
+        safe === 'CANCELED' && 'border-border bg-muted/40 text-muted-foreground',
       )}
     >
       <Icon className="h-3.5 w-3.5" />
-      {state === 'READY' ? 'Ready' : state.charAt(0) + state.slice(1).toLowerCase()}
+      {label}
     </span>
   );
 }

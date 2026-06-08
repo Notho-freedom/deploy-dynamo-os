@@ -30,6 +30,16 @@ Deno.serve(async (req) => {
     const { data: { user } } = await userClient.auth.getUser();
     if (!user) return new Response('Unauthorized', { status: 401, headers: corsHeaders });
 
+    // Ownership check — user must own this Render resource.
+    const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: owned } = await admin
+      .from('user_backend_services')
+      .select('render_service_id')
+      .eq('user_id', user.id)
+      .eq('render_service_id', resource)
+      .maybeSingle();
+    if (!owned) return new Response('Forbidden', { status: 403, headers: corsHeaders });
+
     const apiKey = Deno.env.get('RENDER_API_KEY');
     if (!apiKey) return new Response('RENDER_API_KEY not set', { status: 500, headers: corsHeaders });
     const ownerId = Deno.env.get('RENDER_OWNER_ID');

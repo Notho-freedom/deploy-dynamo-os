@@ -131,6 +131,17 @@ export default function Backend() {
             </div>
           )}
 
+          {!loading && !error && services.length === 0 && postgres.length === 0 && keyvalue.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border p-12 text-center">
+              <Database className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 text-[14px] font-medium">No backend resources yet</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">Spin up a web service, worker, Postgres or Key Value instance to get started.</p>
+              <Button size="sm" className="mt-4" onClick={() => navigate('/dashboard/backend/new')}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Create a backend service
+              </Button>
+            </div>
+          ) : (
+          <>
           {tab === 'overview' && (
             <OverviewGrid totals={totalsByType} postgres={postgres.length} keyvalue={keyvalue.length} services={services} />
           )}
@@ -166,6 +177,8 @@ export default function Backend() {
 
           {tab === 'keyvalue' && (
             <KeyValueTable items={keyvalue} loading={loading} />
+          )}
+          </>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useI18n } from '@/lib/i18n';
 import { Stepper } from '@/components/Stepper';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { Copy, Check, Mail, Plus } from 'lucide-react';
 
 export default function EmailSetup() {
@@ -36,17 +37,17 @@ export default function EmailSetup() {
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Email setup</p>
-        <h1 className="font-editorial text-4xl tracking-tight">
-          {lang === 'fr' ? <>Mail pro en <em className="italic text-primary">60 secondes</em>.</> : <>Pro email in <em className="italic text-primary">60 seconds</em>.</>}
-        </h1>
-      </div>
+    <div>
+      <DashboardToolbar
+        eyebrow="Configure"
+        title={lang === 'fr' ? 'Email professionnel' : 'Professional Email'}
+        subtitle={lang === 'fr' ? 'Provisionnez vos boîtes mail en moins de 60 secondes.' : 'Provision your mailboxes in under 60 seconds.'}
+      />
 
-      <Stepper orientation="horizontal" current={step} steps={steps} />
+      <div className="space-y-8 px-4 py-6 md:px-6">
+        <Stepper orientation="horizontal" current={step} steps={steps} />
 
-      <div className="grid lg:grid-cols-12 gap-6">
+        <div className="grid lg:grid-cols-12 gap-6">
         <div className="lg:col-span-7 border border-border p-6 min-h-[360px]">
           {step === 0 && (
             <div className="space-y-4 max-w-md">
@@ -111,6 +112,7 @@ export default function EmailSetup() {
           <div className="bogolan-stripe h-1 mt-6 opacity-30" />
           <p className="text-[11px] text-muted-foreground mt-4 leading-relaxed">{lang === 'fr' ? 'NebulaOS provisionne automatiquement Zoho Mail Lite — gratuit jusqu\'à 5 boîtes / domaine.' : 'NebulaOS auto-provisions Zoho Mail Lite — free up to 5 mailboxes per domain.'}</p>
         </aside>
+      </div>
       </div>
     </div>
   );
