@@ -162,6 +162,45 @@ export const vercel = {
     projectSettings?: Record<string, unknown>;
     target?: 'production';
   }) => vercelApi<VercelDeployment>('/v13/deployments', { method: 'POST', body: input }),
+
+  // Deep API surface — phase 4
+  listAliases: (projectId: string) => vercelApi<{ aliases: any[] }>(`/v1/projects/${projectId}/aliases`, { silent: [403, 404] }),
+  getAlias: (alias: string) => vercelApi<any>(`/v2/aliases/${alias}`, { silent: [403, 404] }),
+  createAlias: (deploymentId: string, alias: string) =>
+    vercelApi(`/v2/aliases/${alias}`, { method: 'POST', body: { deploymentId } }),
+  removeAlias: (aliasId: string) => vercelApi(`/v2/aliases/${aliasId}`, { method: 'DELETE' }),
+  listDeploymentFiles: (deploymentId: string) =>
+    vercelApi<any[]>(`/v6/deployments/${deploymentId}/files`, { silent: [403, 404] }),
+  getDeploymentFile: (deploymentId: string, fileId: string) =>
+    vercelApi<any>(`/v7/deployments/${deploymentId}/files/${fileId}`, { silent: [403, 404] }),
+  listChecks: (deploymentId: string) =>
+    vercelApi<{ checks: any[] }>(`/v1/deployments/${deploymentId}/checks`, { silent: [403, 404] }),
+  getFirewall: (projectId: string) =>
+    vercelApi<any>(`/v1/firewall/configs/${projectId}`, { silent: [403, 404] }),
+  attackStatus: () => vercelApi<any>('/v1/security/attack-status', { silent: [403] }),
+  purgeCache: () => vercelApi('/v1/data-cache/purge-all', { method: 'DELETE' }),
+  createProtectionBypass: (projectId: string) =>
+    vercelApi(`/v1/projects/${projectId}/protection-bypass`, { method: 'POST', body: {} }),
+  webVitals: (projectId: string, from: number, to: number) =>
+    vercelApi<any>(`/v1/projects/${projectId}/web-vitals`, { query: { from, to }, silent: [403, 404] }),
+  insights: (projectId: string) =>
+    vercelApi<any>(`/v1/projects/${projectId}/insights`, { silent: [403, 404] }),
+  listLogDrains: () => vercelApi<any[]>('/v1/integrations/log-drains', { silent: [403] }),
+  createLogDrain: (body: Record<string, unknown>) =>
+    vercelApi('/v1/integrations/log-drains', { method: 'POST', body }),
+  deleteLogDrain: (id: string) => vercelApi(`/v1/integrations/log-drains/${id}`, { method: 'DELETE' }),
+  listWebhooks: () => vercelApi<any[]>('/v1/webhooks', { silent: [403] }),
+  createWebhook: (body: Record<string, unknown>) => vercelApi('/v1/webhooks', { method: 'POST', body }),
+  deleteWebhook: (id: string) => vercelApi(`/v1/webhooks/${id}`, { method: 'DELETE' }),
+  listEdgeConfigs: () => vercelApi<any[]>('/v1/edge-config', { silent: [403] }),
+  getEdgeConfigItems: (id: string) => vercelApi<any[]>(`/v1/edge-config/${id}/items`, { silent: [403, 404] }),
+  pauseProject: (projectId: string) => vercelApi(`/v9/projects/${projectId}/pause`, { method: 'POST' }),
+  unpauseProject: (projectId: string) => vercelApi(`/v9/projects/${projectId}/unpause`, { method: 'POST' }),
+  listCustomEnvironments: (projectId: string) =>
+    vercelApi<any[]>(`/v9/projects/${projectId}/custom-environments`, { silent: [403, 404] }),
+  listRedirects: (projectId: string) =>
+    vercelApi<any[]>(`/v9/projects/${projectId}/redirects`, { silent: [403, 404] }),
+  domainCerts: (domain: string) => vercelApi<any[]>(`/v4/domains/${domain}/certs`, { silent: [403, 404] }),
 };
 
 // Open an SSE stream for build logs via the dedicated edge function.
