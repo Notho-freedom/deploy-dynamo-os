@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useIntegration } from '@/hooks/useIntegration';
 import { Button } from '@/components/ui/button';
+import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { startGithubOAuth } from '@/lib/github';
 import { Github, Triangle, ArrowRight, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,16 +11,13 @@ export default function CICD() {
   const gh = useIntegration('github');
 
   return (
-    <div className="space-y-8 max-w-3xl">
-      <div>
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">CI / CD</p>
-        <h1 className="font-editorial text-4xl tracking-tight">
-          Push. <em className="italic text-muted-foreground">Build. Ship.</em>
-        </h1>
-        <p className="text-[13px] text-muted-foreground mt-2">
-          Connect GitHub once, then import any repository from the Deploy page.
-        </p>
-      </div>
+    <div>
+      <DashboardToolbar
+        eyebrow="Source & CI"
+        title="Integrations"
+        subtitle="Connect GitHub once, then import any repository from the Deploy page."
+      />
+      <div className="space-y-8 max-w-3xl px-4 py-6 md:px-6">
 
       {/* GitHub connection */}
       <div className="border border-border rounded-md p-5 flex items-center gap-4">
@@ -72,6 +70,7 @@ export default function CICD() {
         {!gh.connected && (
           <p className="text-[11px] font-mono text-muted-foreground mt-2">Connect GitHub above to enable imports.</p>
         )}
+      </div>
       </div>
     </div>
   );
