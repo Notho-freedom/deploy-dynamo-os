@@ -50,13 +50,12 @@ const productNav: NavItem[] = [
   { to: '/dashboard/logs', label: 'Logs', icon: List },
   { to: '/dashboard/analytics', label: 'Analytics', icon: Activity },
   { to: '/dashboard/observability', label: 'Observability', icon: Zap },
-  { to: '/dashboard/backend', label: 'Storage', icon: Database },
   { to: '/dashboard/cicd', label: 'Integrations', icon: GitBranch },
 ];
 
 const configNav: NavItem[] = [
   { to: '/dashboard/domains', label: 'Domains', icon: Globe },
-  { to: '/dashboard/backend', label: 'Environment Variables', icon: SlidersHorizontal },
+  { to: '/dashboard/backend', label: 'Backend', icon: Database },
   { to: '/dashboard/email', label: 'Email', icon: Mail },
   { to: '/dashboard/billing', label: 'Billing', icon: CircleDollarSign },
   { to: '/dashboard/settings', label: 'Settings', icon: Settings },
@@ -65,7 +64,6 @@ const configNav: NavItem[] = [
 const platformNav: NavItem[] = [
   { to: '/dashboard/builder', label: 'Builder', icon: Code2 },
   { to: '/dashboard/ui', label: 'UI Generator', icon: Workflow },
-  { to: '/dashboard/backend', label: 'Backend', icon: Shield },
 ];
 
 function sectionLabel(pathname: string) {
