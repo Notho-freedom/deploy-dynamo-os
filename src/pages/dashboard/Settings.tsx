@@ -98,8 +98,14 @@ export default function Settings() {
   const displayName = profile?.display_name || user.email?.split('@')[0] || '';
 
   return (
-    <div className="grid grid-cols-12 gap-8">
-      <aside className="col-span-12 md:col-span-3">
+    <div>
+      <DashboardToolbar
+        eyebrow="Workspace"
+        title="Settings"
+        subtitle={lang === 'fr' ? 'Profil, équipe, intégrations et préférences.' : 'Profile, team, integrations and preferences.'}
+      />
+      <div className="grid grid-cols-12 gap-8 px-4 py-6 md:px-6">
+        <aside className="col-span-12 md:col-span-3">
         <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">Settings</p>
         <ul className="space-y-0.5">
           {sections.map((s) => (
