@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { Eye, EyeOff, Plus, Triangle, Github, Mail, Globe, CreditCard } from 'lucide-react';
 import { startGithubOAuth, startVercelOAuth } from '@/lib/github';
 import { toast } from 'sonner';
@@ -213,6 +214,7 @@ export default function Settings() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
