@@ -3,6 +3,7 @@ import { useI18n } from '@/lib/i18n';
 import { Stepper } from '@/components/Stepper';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { Copy, Check, Mail, Plus } from 'lucide-react';
 
 export default function EmailSetup() {
@@ -111,6 +112,7 @@ export default function EmailSetup() {
           <div className="bogolan-stripe h-1 mt-6 opacity-30" />
           <p className="text-[11px] text-muted-foreground mt-4 leading-relaxed">{lang === 'fr' ? 'NebulaOS provisionne automatiquement Zoho Mail Lite — gratuit jusqu\'à 5 boîtes / domaine.' : 'NebulaOS auto-provisions Zoho Mail Lite — free up to 5 mailboxes per domain.'}</p>
         </aside>
+      </div>
       </div>
     </div>
   );
