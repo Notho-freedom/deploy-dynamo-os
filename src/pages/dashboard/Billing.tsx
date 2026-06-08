@@ -25,15 +25,19 @@ export default function Billing() {
   const [providerOpen, setProviderOpen] = useState<typeof providers[number]['k'] | null>(null);
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">Billing & Wallet</p>
-          <p className="font-editorial text-5xl num">{wallet.balanceFcfa.toLocaleString('fr-FR')} <span className="text-xl text-muted-foreground">FCFA</span></p>
-          <p className="text-[12px] text-muted-foreground font-mono mt-1">≈ ${wallet.balanceUsd.toFixed(2)} USD</p>
-        </div>
-        <Button onClick={() => setTab('topup')} className="gap-2"><ArrowUpRight className="h-3.5 w-3.5" /> {lang === 'fr' ? 'Recharger' : 'Top up'}</Button>
-      </div>
+    <div>
+      <DashboardToolbar
+        eyebrow="Billing & Wallet"
+        title={`${wallet.balanceFcfa.toLocaleString('fr-FR')} FCFA`}
+        subtitle={`≈ $${wallet.balanceUsd.toFixed(2)} USD`}
+        actions={
+          <Button onClick={() => setTab('topup')} className="gap-2" size="sm">
+            <ArrowUpRight className="h-3.5 w-3.5" /> {lang === 'fr' ? 'Recharger' : 'Top up'}
+          </Button>
+        }
+      />
+
+      <div className="space-y-8 px-4 py-6 md:px-6">
 
       <div className="border-b border-border flex gap-1">
         {tabs.map((t) => (
