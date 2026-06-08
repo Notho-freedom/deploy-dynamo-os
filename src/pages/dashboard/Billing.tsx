@@ -4,6 +4,7 @@ import { useApp } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MobileMoneyDialog } from '@/components/MobileMoneyDialog';
+import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { ArrowUpRight, CreditCard, Check, Minus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -169,6 +170,7 @@ export default function Billing() {
           onSuccess={(ref) => addWalletTx({ type: 'topup', amount, currency: 'XOF', method: providerOpen, description: `Recharge ${providerOpen.toUpperCase()} · ${ref}`, status: 'succeeded' })}
         />
       )}
+      </div>
     </div>
   );
 }
