@@ -114,7 +114,6 @@ export default function DeployDetail() {
     let active = true;
     async function init() {
       setLoading(true);
-      setNotFound(false);
       try {
         const record = await loadMeta();
         await loadProjectDetail();
@@ -125,7 +124,22 @@ export default function DeployDetail() {
             .catch(() => ({ deployments: [] as VercelDeployment[] }));
           id = list.deployments[0]?.uid || list.deployments[0]?.id || null;
         }
-        if (id && active) await loadDeployment(id);
+        if (!active) return;
+        if (!id) {
+          // No deployment exists at all — confirmed empty.
+          setNotFound(true);
+          setDeployment(null);
+        } else {
+          const item = await vercel.getDeployment(id, { silent404: true });
+          if (!active) return;
+          if (!item) {
+            setNotFound(true);
+            setDeployment(null);
+          } else {
+            setNotFound(false);
+            setDeployment(item);
+          }
+        }
         if (active) await loadProjectResources();
       } catch (error) {
         if (active) toast.error(error instanceof Error ? error.message : String(error));
@@ -137,9 +151,10 @@ export default function DeployDetail() {
     return () => {
       active = false;
     };
-  }, [initialDeployment, loadDeployment, loadMeta, loadProjectDetail, loadProjectResources, projectId]);
+  }, [initialDeployment, loadMeta, loadProjectDetail, loadProjectResources, projectId]);
 
-  // Re-poll only the deployment status (not events — those come via SSE).
+  // Re-poll only the deployment status while building. NEVER flip notFound from a poll —
+  // transient 404s during build propagation must not nuke the loaded data.
   useEffect(() => {
     if (!deployment) return;
     if (deployment.state === 'READY' || deployment.state === 'ERROR' || deployment.state === 'CANCELED') return;
@@ -149,16 +164,17 @@ export default function DeployDetail() {
       try {
         const next = await vercel.getDeployment(deployment.uid, { silent404: true });
         if (cancelled) return;
-        if (!next) {
-          setNotFound(true);
-          return;
-        }
-        setDeployment(next);
-        if (next.state !== 'READY' && next.state !== 'ERROR' && next.state !== 'CANCELED') {
-          timer = window.setTimeout(tick, 3000);
+        if (next) {
+          setDeployment(next);
+          if (next.state !== 'READY' && next.state !== 'ERROR' && next.state !== 'CANCELED') {
+            timer = window.setTimeout(tick, 3000);
+          }
+        } else {
+          // Keep last good state visible; retry slowly.
+          timer = window.setTimeout(tick, 5000);
         }
       } catch {
-        // stop polling on transient error
+        timer = window.setTimeout(tick, 5000);
       }
     };
     timer = window.setTimeout(tick, 3000);
@@ -166,7 +182,7 @@ export default function DeployDetail() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [deployment]);
+  }, [deployment?.uid, deployment?.state]);
 
   const redeploy = async () => {
     if (!meta) return;
