@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Bot, Boxes, Code2, Github, Loader2, Lock, Plus, Search, Sparkles, Workflow } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Boxes, Code2, Github, Globe, Loader2, Lock, Plus, RefreshCw, Search, Sparkles, Workflow } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyPanel, SelectFilter } from '@/components/dashboard/DashboardPrimitives';
 import { startGithubOAuth } from '@/lib/github';
 import { useGithubRepos } from '@/hooks/useGithubRepos';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function DeployNew() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const githubRepos = useGithubRepos();
   const [owner, setOwner] = useState('all');
   const [query, setQuery] = useState('');
+  const [creatingEmpty, setCreatingEmpty] = useState(false);
 
   const filteredRepos = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -104,39 +110,50 @@ export default function DeployNew() {
                 )}
 
                 <div className="overflow-hidden rounded-md border border-border bg-card">
-                  <div className="max-h-[430px] overflow-y-auto divide-y divide-border">
-                    {githubRepos.loading && (
-                      <div className="flex h-40 items-center justify-center gap-2 text-[13px] text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading repositories...
-                      </div>
-                    )}
-                    {!githubRepos.loading && filteredRepos.length === 0 && (
-                      <div className="px-4 py-12 text-center text-[13px] text-muted-foreground">No repositories match.</div>
-                    )}
-                    {filteredRepos.map((repo) => (
-                      <div key={repo.id} className="flex items-center gap-3 px-4 py-3 transition hover:bg-muted/30">
-                        <img src={repo.owner.avatar_url} className="h-8 w-8 shrink-0 rounded-md" alt="" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-[13px] font-semibold">{repo.name}</p>
-                            {repo.private && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                  <div className="max-h-[430px] divide-y divide-border overflow-y-auto">
+                    {githubRepos.loading && githubRepos.repos.length === 0 ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-4 py-3">
+                          <Skeleton className="h-8 w-8 rounded-md" />
+                          <div className="flex-1 space-y-1.5">
+                            <Skeleton className="h-3 w-1/3" />
+                            <Skeleton className="h-3 w-2/3" />
                           </div>
-                          <p className="truncate text-[12px] text-muted-foreground">
-                            {repo.full_name} · {repo.language || 'Unknown'} · {repo.default_branch} · {formatDistanceToNow(new Date(repo.pushed_at), { addSuffix: true })}
-                          </p>
+                          <Skeleton className="h-7 w-16 rounded-md" />
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => navigate(`/dashboard/deploy/new/configure?repo=${encodeURIComponent(repo.full_name)}&id=${repo.id}`)}
-                          className="gap-1.5"
-                        >
-                          Import
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ))}
+                      ))
+                    ) : filteredRepos.length === 0 ? (
+                      <div className="px-4 py-12 text-center text-[13px] text-muted-foreground">No repositories match.</div>
+                    ) : (
+                      filteredRepos.map((repo) => (
+                        <div key={repo.id} className="flex items-center gap-3 px-4 py-3 transition hover:bg-muted/30">
+                          <img src={repo.owner.avatar_url} className="h-8 w-8 shrink-0 rounded-md" alt="" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-[13px] font-semibold">{repo.name}</p>
+                              {repo.private && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                            </div>
+                            <p className="truncate text-[12px] text-muted-foreground">
+                              {repo.full_name} · {repo.language || 'Unknown'} · {repo.default_branch} · {formatDistanceToNow(new Date(repo.pushed_at), { addSuffix: true })}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => navigate(`/dashboard/deploy/new/configure?repo=${encodeURIComponent(repo.full_name)}&id=${repo.id}`)}
+                            className="gap-1.5"
+                          >
+                            Import
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
+                  {githubRepos.refreshing && (
+                    <div className="flex items-center justify-center gap-1.5 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+                      <RefreshCw className="h-3 w-3 animate-spin" /> Refreshing in background…
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -155,13 +172,61 @@ export default function DeployNew() {
             </div>
 
             <div>
-              <p className="mb-3 text-[13px] text-muted-foreground">Looking for something else?</p>
-              <FeatureRow
-                icon={<Code2 className="h-4 w-4" />}
-                title="Create Empty Project"
-                description="Not connected yet. Import from GitHub for a real project source."
-                action={<Button disabled variant="outline" size="sm">Create</Button>}
-              />
+              <p className="mb-3 text-[13px] text-muted-foreground">Start from scratch</p>
+              <div className="space-y-3">
+                <FeatureRow
+                  icon={<Code2 className="h-4 w-4" />}
+                  title="Create Empty Project"
+                  description="Provision a project shell without a Git repo. You can connect one later."
+                  action={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!user || creatingEmpty}
+                      onClick={async () => {
+                        if (!user) return;
+                        setCreatingEmpty(true);
+                        try {
+                          const name = `project-${Math.random().toString(36).slice(2, 8)}`;
+                          const { data, error } = await supabase
+                            .from('user_projects')
+                            .insert({
+                              user_id: user.id,
+                              vercel_project_id: `local-${name}`,
+                              vercel_project_name: name,
+                              github_repo_full_name: '',
+                              github_repo_id: null,
+                              branch: 'main',
+                              framework: null,
+                              production_url: null,
+                            } as never)
+                            .select('vercel_project_id')
+                            .single();
+                          if (error) throw new Error(error.message);
+                          toast.success('Empty project created');
+                          navigate(`/dashboard/deploy/${(data as { vercel_project_id: string }).vercel_project_id}`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : String(e));
+                        } finally {
+                          setCreatingEmpty(false);
+                        }
+                      }}
+                    >
+                      {creatingEmpty ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Create'}
+                    </Button>
+                  }
+                />
+                <FeatureRow
+                  icon={<Globe className="h-4 w-4" />}
+                  title="Static Site (Render)"
+                  description="Deploy a static build (Vite, React, Hugo…) on Render's CDN."
+                  action={
+                    <Button size="sm" variant="outline" onClick={() => navigate('/dashboard/backend/new?type=static_site')}>
+                      Create
+                    </Button>
+                  }
+                />
+              </div>
             </div>
           </section>
         </div>

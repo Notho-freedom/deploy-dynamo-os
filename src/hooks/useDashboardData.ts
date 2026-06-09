@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
 import { vercel, VercelDeployment } from '@/lib/vercel';
 
 export interface UserProjectRecord {
@@ -45,26 +47,15 @@ export interface DeploymentRow {
   url: string;
 }
 
-interface AsyncState {
-  loading: boolean;
-  error: string | null;
+function messageForDeployment(d: VercelDeployment) {
+  return d.meta?.githubCommitMessage || d.name || 'Deployment';
 }
-
-function messageForDeployment(deployment: VercelDeployment) {
-  return deployment.meta?.githubCommitMessage || deployment.name || 'Deployment';
+function commitForDeployment(d: VercelDeployment) {
+  return d.meta?.githubCommitSha?.slice(0, 7) || 'unknown';
 }
-
-function branchForDeployment(deployment: VercelDeployment, fallback: string) {
-  return deployment.meta?.githubCommitRef || fallback;
-}
-
-function commitForDeployment(deployment: VercelDeployment) {
-  return deployment.meta?.githubCommitSha?.slice(0, 7) || 'unknown';
-}
-
-function durationForDeployment(deployment: VercelDeployment) {
-  if (!deployment.ready || !deployment.created) return null;
-  return Math.max(0, Math.round((deployment.ready - deployment.created) / 1000));
+function durationForDeployment(d: VercelDeployment) {
+  if (!d.ready || !d.created) return null;
+  return Math.max(0, Math.round((d.ready - d.created) / 1000));
 }
 
 export function toDeploymentRow(project: UserProjectRecord, deployment: VercelDeployment): DeploymentRow {
@@ -76,7 +67,7 @@ export function toDeploymentRow(project: UserProjectRecord, deployment: VercelDe
     state: deployment.state,
     environment: deployment.target === 'production' ? 'Production' : 'Preview',
     repo: project.github_repo_full_name,
-    branch: branchForDeployment(deployment, project.branch),
+    branch: deployment.meta?.githubCommitRef || project.branch,
     commitSha: commitForDeployment(deployment),
     created: deployment.created,
     duration: durationForDeployment(deployment),
@@ -86,59 +77,37 @@ export function toDeploymentRow(project: UserProjectRecord, deployment: VercelDe
 
 export function useUserProjects() {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<UserProjectRecord[]>([]);
-  const [state, setState] = useState<AsyncState>({ loading: true, error: null });
+  useRealtimeInvalidate('user_projects', [['user-projects', user?.id]]);
 
-  const refresh = useCallback(async () => {
-    if (!user) {
-      setProjects([]);
-      setState({ loading: false, error: null });
-      return;
-    }
+  const query = useQuery<UserProjectRecord[]>({
+    queryKey: ['user-projects', user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_projects')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return (data || []) as UserProjectRecord[];
+    },
+  });
 
-    setState({ loading: true, error: null });
-    const { data, error } = await supabase
-      .from('user_projects')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setProjects([]);
-      setState({ loading: false, error: error.message });
-      return;
-    }
-
-    setProjects((data || []) as UserProjectRecord[]);
-    setState({ loading: false, error: null });
-  }, [user]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  return { projects, refresh, ...state };
+  return {
+    projects: query.data ?? [],
+    loading: query.isLoading && !query.data,
+    error: query.error ? (query.error as Error).message : null,
+    refresh: () => void query.refetch(),
+  };
 }
 
 export function useRecentDeployments(projects: UserProjectRecord[], perProject = 8) {
-  const [rows, setRows] = useState<DeploymentRow[]>([]);
-  const [latestByProject, setLatestByProject] = useState<Record<string, VercelDeployment | null>>({});
-  const [state, setState] = useState<AsyncState>({ loading: false, error: null });
+  const projectKey = useMemo(() => projects.map((p) => p.vercel_project_id).sort().join('|'), [projects]);
 
-  const projectKey = useMemo(() => projects.map((project) => project.vercel_project_id).join('|'), [projects]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      if (projects.length === 0) {
-        setRows([]);
-        setLatestByProject({});
-        setState({ loading: false, error: null });
-        return;
-      }
-
-      setState({ loading: true, error: null });
+  const query = useQuery({
+    queryKey: ['recent-deployments', projectKey, perProject],
+    enabled: projects.length > 0,
+    queryFn: async () => {
       const results = await Promise.all(
         projects.map(async (project) => {
           try {
@@ -149,31 +118,25 @@ export function useRecentDeployments(projects: UserProjectRecord[], perProject =
           }
         }),
       );
-
-      if (!active) return;
-
-      const nextRows = results
-        .flatMap(({ project, deployments }) => deployments.map((deployment) => toDeploymentRow(project, deployment)))
+      const rows = results
+        .flatMap(({ project, deployments }) => deployments.map((d) => toDeploymentRow(project, d)))
         .sort((a, b) => b.created - a.created);
-
-      const latest = results.reduce<Record<string, VercelDeployment | null>>((acc, result) => {
-        acc[result.project.vercel_project_id] = result.deployments[0] || null;
+      const latest = results.reduce<Record<string, VercelDeployment | null>>((acc, r) => {
+        acc[r.project.vercel_project_id] = r.deployments[0] || null;
         return acc;
       }, {});
+      const firstError = results.find((r) => r.error)?.error || null;
+      return { rows, latestByProject: latest, error: firstError };
+    },
+    refetchInterval: 30_000,
+  });
 
-      const firstError = results.find((result) => result.error)?.error || null;
-      setRows(nextRows);
-      setLatestByProject(latest);
-      setState({ loading: false, error: firstError });
-    }
-
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [projectKey, projects, perProject]);
-
-  return { rows, latestByProject, ...state };
+  return {
+    rows: query.data?.rows ?? [],
+    latestByProject: query.data?.latestByProject ?? {},
+    loading: query.isLoading && !query.data,
+    error: query.data?.error || (query.error ? (query.error as Error).message : null),
+  };
 }
 
 export function useDashboardProjects() {
@@ -200,37 +163,26 @@ export function useDashboardProjects() {
   return {
     projects: dashboardProjects,
     rawProjects: projects,
-    loading: loading || deployments.loading,
+    loading: loading || (deployments.loading && projects.length > 0),
     error: error || deployments.error,
     refresh,
   };
 }
 
 export function useProjectDeployments(projectId?: string, limit = 20) {
-  const [deployments, setDeployments] = useState<VercelDeployment[]>([]);
-  const [state, setState] = useState<AsyncState>({ loading: true, error: null });
-
-  const refresh = useCallback(async () => {
-    if (!projectId) {
-      setDeployments([]);
-      setState({ loading: false, error: null });
-      return;
-    }
-
-    setState({ loading: true, error: null });
-    try {
-      const result = await vercel.listDeployments(projectId, limit);
-      setDeployments(result.deployments || []);
-      setState({ loading: false, error: null });
-    } catch (error) {
-      setDeployments([]);
-      setState({ loading: false, error: error instanceof Error ? error.message : String(error) });
-    }
-  }, [projectId, limit]);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  return { deployments, refresh, ...state };
+  const query = useQuery({
+    queryKey: ['project-deployments', projectId, limit],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const result = await vercel.listDeployments(projectId!, limit);
+      return result.deployments || [];
+    },
+    refetchInterval: 20_000,
+  });
+  return {
+    deployments: query.data ?? [],
+    loading: query.isLoading && !query.data,
+    error: query.error ? (query.error as Error).message : null,
+    refresh: () => void query.refetch(),
+  };
 }

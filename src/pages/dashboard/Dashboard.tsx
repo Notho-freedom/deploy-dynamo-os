@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { AlertCircle, Clock3, GitBranch, LayoutGrid, Plus, Rocket } from 'lucide-react';
-import { DashboardToolbar, EmptyPanel, ProjectCard, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
+import { DashboardToolbar, EmptyPanel, ProjectCard, ProjectCardSkeleton, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
 import { Button } from '@/components/ui/button';
 import { useDashboardProjects, useRecentDeployments } from '@/hooks/useDashboardData';
 import { safeFormatDistance } from '@/lib/utils';
@@ -94,11 +94,9 @@ export default function Dashboard() {
             </div>
           )}
 
-          {loading ? (
+          {loading && projects.length === 0 ? (
             <div className="grid gap-4 lg:grid-cols-2">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-40 animate-pulse rounded-md border border-border bg-card" />
-              ))}
+              {Array.from({ length: 4 }).map((_, index) => <ProjectCardSkeleton key={index} />)}
             </div>
           ) : projects.length === 0 ? (
             <EmptyPanel

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Loader2, ScrollText } from 'lucide-react';
 import { DashboardToolbar, EmptyPanel, FilterBar, SectionPanel, SelectFilter } from '@/components/dashboard/DashboardPrimitives';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Terminal, TerminalLine } from '@/components/Terminal';
 import { supabase } from '@/integrations/supabase/client';
 import { useUserProjects, UserProjectRecord } from '@/hooks/useDashboardData';
@@ -20,38 +22,27 @@ export default function Logs() {
   const [query, setQuery] = useState('');
   const [level, setLevel] = useState('all');
   const [events, setEvents] = useState<AggregatedEvent[]>([]);
-  const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  const [latestDeployments, setLatestDeployments] = useState<Array<{ project: UserProjectRecord; deployment: VercelDeployment }>>([]);
   const sourcesRef = useRef<EventSource[]>([]);
+  const projectKey = useMemo(() => projects.map((p) => p.vercel_project_id).sort().join('|'), [projects]);
 
-  // Load most-recent deployment per project.
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      if (projects.length === 0) {
-        setLatestDeployments([]);
-        return;
-      }
-      setLoading(true);
-      try {
-        const results = await Promise.all(
-          projects.map(async (project) => {
-            const list = await vercel.listDeployments(project.vercel_project_id, 1).catch(() => ({ deployments: [] as VercelDeployment[] }));
-            return list.deployments[0] ? { project, deployment: list.deployments[0] } : null;
-          }),
-        );
-        if (!active) return;
-        setLatestDeployments(results.filter(Boolean) as Array<{ project: UserProjectRecord; deployment: VercelDeployment }>);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [projects]);
+  // Latest deployment per project — cached via React Query so the page renders instantly on revisit.
+  const latestQ = useQuery({
+    queryKey: ['latest-deployments-per-project', projectKey],
+    enabled: projects.length > 0,
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const results = await Promise.all(
+        projects.map(async (project) => {
+          const list = await vercel.listDeployments(project.vercel_project_id, 1).catch(() => ({ deployments: [] as VercelDeployment[] }));
+          return list.deployments[0] ? { project, deployment: list.deployments[0] } : null;
+        }),
+      );
+      return results.filter(Boolean) as Array<{ project: UserProjectRecord; deployment: VercelDeployment }>;
+    },
+  });
+  const latestDeployments = latestQ.data ?? [];
+  const loading = latestQ.isLoading && !latestQ.data;
 
   // Backfill + open SSE streams for each (filtered) deployment.
   useEffect(() => {
@@ -179,13 +170,15 @@ export default function Logs() {
         </FilterBar>
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center gap-2 rounded-md border border-border bg-card text-[13px] text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading recent logs…
+          <div className="space-y-1.5 rounded-md border border-border bg-card p-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-3 w-full" style={{ maxWidth: `${60 + (i * 7) % 40}%` }} />
+            ))}
           </div>
         ) : projects.length === 0 ? (
           <EmptyPanel icon={<ScrollText className="h-9 w-9" />} title="No projects connected" description="Import a project to see live and recent logs here." />
         ) : (
-          <SectionPanel title="Recent build events" meta={`${filtered.length} lines`}>
+          <SectionPanel title="Recent build events" meta={`${filtered.length} lines${streaming ? ' · ● Live' : ''}`}>
             <Terminal lines={lines} streaming={streaming} prompt="logs · all projects" height="h-[560px]" className="rounded-none border-0" />
           </SectionPanel>
         )}

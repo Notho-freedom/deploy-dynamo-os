@@ -1,4 +1,4 @@
-import { Fragment, memo } from "react";
+import React, { Fragment, memo } from "react";
 import { cn } from "@/lib/utils";
 
 // Minimal ANSI SGR parser → React spans with Tailwind classes.
@@ -101,10 +101,10 @@ function parseAnsi(input: string): Segment[] {
 }
 
 const KEYWORD_RULES: Array<{ re: RegExp; cls: string }> = [
-  { re: /\b(error|err|fail(ed)?|fatal|panic)\b/i, cls: "text-red-400" },
-  { re: /\b(warn(ing)?|deprecated)\b/i, cls: "text-yellow-300" },
-  { re: /\b(success|ready|done|complete[d]?|✓)\b/i, cls: "text-emerald-400" },
-  { re: /\b(info|notice)\b/i, cls: "text-cyan-300" },
+  { re: /\b(error|err|fail(ed)?|fatal|panic|exception)\b/i, cls: "text-red-400" },
+  { re: /\b(warn(ing)?|deprecated|notice)\b/i, cls: "text-yellow-300" },
+  { re: /\b(success|ready|done|complete[d]?|✓|ok)\b/i, cls: "text-emerald-400" },
+  { re: /\b(info|debug|trace)\b/i, cls: "text-cyan-300" },
 ];
 
 function keywordClass(text: string): string | undefined {
@@ -112,13 +112,44 @@ function keywordClass(text: string): string | undefined {
   return undefined;
 }
 
+// Enrich a plain log line with semantic spans (timestamps, log levels, HTTP, durations, URLs).
+function enrichSegments(text: string): React.ReactNode {
+  // Patterns combined into one regex with named alternations.
+  const re = /(\b\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?\b)|(\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b)|(\[(?:INFO|WARN|WARNING|ERROR|ERR|DEBUG|TRACE|FATAL)\])|(\b(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b)|(\b[1-5]\d{2}\b)|(\bhttps?:\/\/[^\s)]+)|(\b\d+(?:\.\d+)?(?:ms|s|µs|ns)\b)/g;
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const [full] = m;
+    let cls = '';
+    if (m[1] || m[2]) cls = 'text-zinc-500';
+    else if (m[3]) {
+      const u = full.toUpperCase();
+      if (u.includes('ERR') || u.includes('FATAL')) cls = 'text-red-400 font-semibold';
+      else if (u.includes('WARN')) cls = 'text-yellow-300 font-semibold';
+      else if (u.includes('DEBUG') || u.includes('TRACE')) cls = 'text-zinc-400';
+      else cls = 'text-cyan-300 font-semibold';
+    } else if (m[4]) cls = 'text-fuchsia-300';
+    else if (m[5]) {
+      const code = Number(full);
+      cls = code >= 500 ? 'text-red-400 font-semibold' : code >= 400 ? 'text-amber-300 font-semibold' : code >= 300 ? 'text-cyan-300' : 'text-emerald-300';
+    } else if (m[6]) cls = 'text-blue-300 underline underline-offset-2';
+    else if (m[7]) cls = 'text-emerald-300';
+    out.push(<span key={`hl-${key++}`} className={cls}>{full}</span>);
+    last = m.index + full.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 export const AnsiLine = memo(function AnsiLine({ text, className }: { text: string; className?: string }) {
-  // Strip carriage returns; if no escape codes use keyword highlight.
   const cleaned = text.replace(/\r/g, "");
   const hasAnsi = cleaned.includes("\x1b[");
   if (!hasAnsi) {
     const kw = keywordClass(cleaned);
-    return <span className={cn(className, kw)}>{cleaned || " "}</span>;
+    return <span className={cn(className, kw)}>{enrichSegments(cleaned || " ")}</span>;
   }
   const segs = parseAnsi(cleaned);
   return (

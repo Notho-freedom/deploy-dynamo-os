@@ -3,14 +3,17 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  ArrowLeft,
   Bell,
   Box,
   ChevronDown,
   CircleDollarSign,
+  Clock,
   Code2,
   Database,
   GitBranch,
   Globe,
+  KeyRound,
   LayoutGrid,
   List,
   Loader2,
@@ -21,6 +24,7 @@ import {
   Plus,
   Rocket,
   Search,
+  Server,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -64,6 +68,18 @@ const configNav: NavItem[] = [
 const platformNav: NavItem[] = [
   { to: '/dashboard/builder', label: 'Builder', icon: Code2 },
   { to: '/dashboard/ui', label: 'UI Generator', icon: Workflow },
+];
+
+const backendNav: NavItem[] = [
+  { to: '/dashboard/backend', label: 'Overview', icon: Activity, end: true },
+  { to: '/dashboard/backend?type=web_service', label: 'Web Services', icon: Server },
+  { to: '/dashboard/backend?type=static_site', label: 'Static Sites', icon: Globe },
+  { to: '/dashboard/backend?type=background_worker', label: 'Workers', icon: Workflow },
+  { to: '/dashboard/backend?type=cron_job', label: 'Cron Jobs', icon: Clock },
+  { to: '/dashboard/backend?type=private_service', label: 'Private Services', icon: Box },
+  { to: '/dashboard/backend?type=postgres', label: 'Postgres', icon: Database },
+  { to: '/dashboard/backend?type=keyvalue', label: 'Key Value', icon: KeyRound },
+  { to: '/dashboard/backend/new', label: 'New Service', icon: Plus },
 ];
 
 function sectionLabel(pathname: string) {
@@ -295,11 +311,30 @@ function DashboardSidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <NavGroup items={productNav} pathname={pathname} onNavigate={onNavigate} />
-        <div className="my-3 h-px bg-border" />
-        <NavGroup items={configNav} pathname={pathname} onNavigate={onNavigate} />
-        <div className="my-3 h-px bg-border" />
-        <NavGroup items={platformNav} pathname={pathname} onNavigate={onNavigate} />
+        {pathname.startsWith('/dashboard/backend') ? (
+          <>
+            <Link
+              to="/dashboard"
+              onClick={onNavigate}
+              className="mb-3 flex h-9 items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              <span className="inline-flex items-center gap-2">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+              </span>
+              <span className="text-[11px] uppercase tracking-widest text-foreground/80">Backend</span>
+            </Link>
+            <NavGroup items={backendNav} pathname={pathname + (typeof window !== 'undefined' ? window.location.search : '')} onNavigate={onNavigate} />
+          </>
+        ) : (
+          <>
+            <NavGroup items={productNav} pathname={pathname} onNavigate={onNavigate} />
+            <div className="my-3 h-px bg-border" />
+            <NavGroup items={configNav} pathname={pathname} onNavigate={onNavigate} />
+            <div className="my-3 h-px bg-border" />
+            <NavGroup items={platformNav} pathname={pathname} onNavigate={onNavigate} />
+          </>
+        )}
       </nav>
 
       <div className="border-t border-border p-2">

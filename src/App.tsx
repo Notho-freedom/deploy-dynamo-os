@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -33,7 +34,7 @@ import Settings from "./pages/dashboard/Settings.tsx";
 import VercelCallback from "./pages/integrations/VercelCallback.tsx";
 import GithubCallback from "./pages/integrations/GithubCallback.tsx";
 
-const queryClient = new QueryClient();
+
 
 const App = () => {
   useEffect(() => {
