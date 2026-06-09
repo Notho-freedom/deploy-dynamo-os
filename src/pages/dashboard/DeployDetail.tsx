@@ -248,12 +248,9 @@ export default function DeployDetail() {
       </div>
 
       <div className="px-4 py-6 md:px-6">
-        {loading ? (
-          <div className="flex h-64 items-center justify-center gap-2 rounded-md border border-border bg-card text-[13px] text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading deployment...
-          </div>
-        ) : notFound || !deployment ? (
+        {loading && !deployment ? (
+          <DeployDetailSkeleton />
+        ) : notFound && !deployment ? (
           <EmptyPanel
             icon={<Rocket className="h-10 w-10" />}
             title="Deployment unavailable"
@@ -266,7 +263,7 @@ export default function DeployDetail() {
               ) : null
             }
           />
-        ) : (
+        ) : deployment ? (
           <>
             {tab === 'deployment' && (
               <DeploymentOverviewTab deployment={deployment} project={project} meta={meta} domains={domains} />
@@ -276,8 +273,34 @@ export default function DeployDetail() {
             {tab === 'source' && <SourceTab meta={meta} />}
             {tab === 'open-graph' && <OpenGraphTab deployment={deployment} />}
           </>
+        ) : (
+          <DeployDetailSkeleton />
         )}
       </div>
+    </div>
+  );
+}
+
+function DeployDetailSkeleton() {
+  return (
+    <div className="space-y-5">
+      <div className="overflow-hidden rounded-md border border-border bg-card">
+        <div className="border-b border-border px-4 py-2.5">
+          <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+        </div>
+        <div className="grid gap-5 p-4 lg:grid-cols-[360px_1fr]">
+          <div className="h-44 animate-pulse rounded-md bg-muted/40" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+                <div className="h-4 w-32 animate-pulse rounded bg-muted/70" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="h-48 animate-pulse rounded-md border border-border bg-card" />
     </div>
   );
 }
