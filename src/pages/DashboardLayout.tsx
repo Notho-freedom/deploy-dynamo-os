@@ -3,14 +3,17 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  ArrowLeft,
   Bell,
   Box,
   ChevronDown,
   CircleDollarSign,
+  Clock,
   Code2,
   Database,
   GitBranch,
   Globe,
+  KeyRound,
   LayoutGrid,
   List,
   Loader2,
@@ -21,6 +24,7 @@ import {
   Plus,
   Rocket,
   Search,
+  Server,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -64,6 +68,18 @@ const configNav: NavItem[] = [
 const platformNav: NavItem[] = [
   { to: '/dashboard/builder', label: 'Builder', icon: Code2 },
   { to: '/dashboard/ui', label: 'UI Generator', icon: Workflow },
+];
+
+const backendNav: NavItem[] = [
+  { to: '/dashboard/backend', label: 'Overview', icon: Activity, end: true },
+  { to: '/dashboard/backend?type=web_service', label: 'Web Services', icon: Server },
+  { to: '/dashboard/backend?type=static_site', label: 'Static Sites', icon: Globe },
+  { to: '/dashboard/backend?type=background_worker', label: 'Workers', icon: Workflow },
+  { to: '/dashboard/backend?type=cron_job', label: 'Cron Jobs', icon: Clock },
+  { to: '/dashboard/backend?type=private_service', label: 'Private Services', icon: Box },
+  { to: '/dashboard/backend?type=postgres', label: 'Postgres', icon: Database },
+  { to: '/dashboard/backend?type=keyvalue', label: 'Key Value', icon: KeyRound },
+  { to: '/dashboard/backend/new', label: 'New Service', icon: Plus },
 ];
 
 function sectionLabel(pathname: string) {
