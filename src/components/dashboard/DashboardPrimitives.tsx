@@ -286,15 +286,15 @@ export function DeploymentTable({ rows, loading }: { rows: DeploymentRow[]; load
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1080px] table-fixed text-[13px]">
           <colgroup>
-            <col style={{ width: '160px' }} />
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '110px' }} />
-            <col />
-            <col style={{ width: '200px' }} />
             <col style={{ width: '140px' }} />
-            <col style={{ width: '90px' }} />
             <col style={{ width: '130px' }} />
-            <col style={{ width: '52px' }} />
+            <col style={{ width: '100px' }} />
+            <col style={{ width: '320px' }} />
+            <col />
+            <col style={{ width: '140px' }} />
+            <col style={{ width: '80px' }} />
+            <col style={{ width: '120px' }} />
+            <col style={{ width: '44px' }} />
           </colgroup>
           <thead className="border-b border-border bg-muted/20 text-[11px] uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -311,41 +311,43 @@ export function DeploymentTable({ rows, loading }: { rows: DeploymentRow[]; load
           </thead>
           <tbody className="divide-y divide-border">
             {rows.map((row) => (
-              <tr key={`${row.projectId}-${row.uid}`} className="transition hover:bg-muted/30">
-                <td className="px-4 py-3 align-top">
+              <tr key={`${row.projectId}-${row.uid}`} className="h-[60px] transition hover:bg-muted/30">
+                <td className="truncate px-4 align-middle">
                   <Link to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="font-mono text-[12px] text-foreground hover:text-primary">
                     {shortDeploymentId(row.uid)}
                   </Link>
                 </td>
-                <td className="px-4 py-3 align-top">
-                  <DeploymentStatusBadge state={row.state} />
-                  {row.duration !== null && <span className="ml-2 text-[11px] text-muted-foreground">{row.duration}s</span>}
+                <td className="px-4 align-middle">
+                  <div className="flex items-center gap-2">
+                    <DeploymentStatusBadge state={row.state} />
+                    {row.duration !== null && <span className="text-[11px] text-muted-foreground">{row.duration}s</span>}
+                  </div>
                 </td>
-                <td className="px-4 py-3 align-top">
+                <td className="px-4 align-middle">
                   <span className={cn('rounded-full border px-2 py-0.5 text-[11px]', row.environment === 'Production' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border text-muted-foreground')}>
                     {row.environment}
                   </span>
                 </td>
-                <td className="px-4 py-3 align-top">
+                <td className="px-4 align-middle">
                   <Link to={`/dashboard/deploy/${row.projectId}?deployment=${row.uid}`} className="block hover:text-primary">
-                    <TruncatedText text={row.message} lines={2} className="text-[13px] font-medium" />
+                    <TruncatedText text={row.message} lines={2} className="text-[13px] font-medium leading-[1.25]" />
                   </Link>
                 </td>
-                <td className="px-4 py-3 align-top">
+                <td className="px-4 align-middle">
                   <div className="truncate font-medium">{row.projectName}</div>
                   <div className="truncate text-[11px] text-muted-foreground">{row.repo}</div>
                 </td>
-                <td className="px-4 py-3 align-top text-muted-foreground">
-                  <span className="inline-flex max-w-full items-center gap-1 truncate">
+                <td className="px-4 align-middle text-muted-foreground">
+                  <span className="inline-flex max-w-full items-center gap-1">
                     <GitBranch className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{row.branch}</span>
                   </span>
                 </td>
-                <td className="px-4 py-3 align-top font-mono text-[12px] text-muted-foreground">{row.commitSha}</td>
-                <td className="px-4 py-3 align-top text-right text-[12px] text-muted-foreground">
+                <td className="px-4 align-middle font-mono text-[12px] text-muted-foreground">{row.commitSha}</td>
+                <td className="px-4 align-middle text-right text-[12px] text-muted-foreground">
                   {safeFormatDistance(row.created, { addSuffix: true })}
                 </td>
-                <td className="px-2 py-3 align-top text-right">
+                <td className="px-2 align-middle text-right">
                   {row.url && (
                     <a href={`https://${row.url}`} target="_blank" rel="noreferrer" className="inline-flex text-muted-foreground hover:text-foreground" aria-label="Open deployment">
                       <ExternalLink className="h-4 w-4" />
