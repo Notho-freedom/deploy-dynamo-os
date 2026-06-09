@@ -170,13 +170,15 @@ export default function Logs() {
         </FilterBar>
 
         {loading ? (
-          <div className="flex h-48 items-center justify-center gap-2 rounded-md border border-border bg-card text-[13px] text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading recent logs…
+          <div className="space-y-1.5 rounded-md border border-border bg-card p-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-3 w-full" style={{ maxWidth: `${60 + (i * 7) % 40}%` }} />
+            ))}
           </div>
         ) : projects.length === 0 ? (
           <EmptyPanel icon={<ScrollText className="h-9 w-9" />} title="No projects connected" description="Import a project to see live and recent logs here." />
         ) : (
-          <SectionPanel title="Recent build events" meta={`${filtered.length} lines`}>
+          <SectionPanel title="Recent build events" meta={`${filtered.length} lines${streaming ? ' · ● Live' : ''}`}>
             <Terminal lines={lines} streaming={streaming} prompt="logs · all projects" height="h-[560px]" className="rounded-none border-0" />
           </SectionPanel>
         )}
