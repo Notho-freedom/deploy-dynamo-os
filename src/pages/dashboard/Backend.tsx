@@ -1,27 +1,40 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Box, Database, KeyRound, Workflow, Activity, Server, Clock, Globe, Plus, RefreshCw, Loader2, Search,
-  PauseCircle, PlayCircle, RotateCcw, Trash2, ExternalLink, AlertCircle, CheckCircle2,
+  Box, Database, KeyRound, Workflow, Activity, Server, Clock, Globe, Plus, RefreshCw, Loader2,
+  PauseCircle, PlayCircle, RotateCcw, Trash2, ExternalLink, AlertCircle, ArrowRight,
 } from 'lucide-react';
 import { render, RenderService, RenderPostgres, RenderKeyValue } from '@/lib/render';
 import { Button } from '@/components/ui/button';
 import { DashboardToolbar, FilterBar, SelectFilter } from '@/components/dashboard/DashboardPrimitives';
+import { useRealtimeInvalidate } from '@/hooks/useRealtimeInvalidate';
+import { useAuth } from '@/hooks/useAuth';
 import { safeFormatDistance, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-const TABS = [
-  { k: 'overview', label: 'Overview', I: Activity },
-  { k: 'web', label: 'Web Services', I: Server },
-  { k: 'static', label: 'Static Sites', I: Globe },
-  { k: 'workers', label: 'Background Workers', I: Workflow },
-  { k: 'cron', label: 'Cron Jobs', I: Clock },
-  { k: 'private', label: 'Private Services', I: Box },
-  { k: 'postgres', label: 'Postgres', I: Database },
-  { k: 'keyvalue', label: 'Key Value', I: KeyRound },
-] as const;
+type TabKey = 'overview' | 'web_service' | 'static_site' | 'background_worker' | 'cron_job' | 'private_service' | 'postgres' | 'keyvalue';
 
-type TabKey = typeof TABS[number]['k'];
+const TAB_LABELS: Record<TabKey, string> = {
+  overview: 'Overview',
+  web_service: 'Web Services',
+  static_site: 'Static Sites',
+  background_worker: 'Background Workers',
+  cron_job: 'Cron Jobs',
+  private_service: 'Private Services',
+  postgres: 'Postgres',
+  keyvalue: 'Key Value',
+};
+
+const NEW_LABELS: Partial<Record<TabKey, string>> = {
+  web_service: 'Create Web Service',
+  static_site: 'Create Static Site',
+  background_worker: 'Create Worker',
+  cron_job: 'Create Cron Job',
+  private_service: 'Create Private Service',
+  postgres: 'Create Postgres Database',
+  keyvalue: 'Create Key Value',
+};
 
 function statusBadge(status?: string, suspended?: string) {
   if (suspended === 'suspended') return { cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30', label: 'Suspended' };
@@ -34,43 +47,62 @@ function statusBadge(status?: string, suspended?: string) {
 
 export default function Backend() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<TabKey>('overview');
-  const [services, setServices] = useState<RenderService[]>([]);
-  const [postgres, setPostgres] = useState<RenderPostgres[]>([]);
-  const [keyvalue, setKeyvalue] = useState<RenderKeyValue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [region, setRegion] = useState('all');
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get('type') as TabKey) || 'overview';
+  const query = params.get('q') || '';
+  const region = params.get('region') || 'all';
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [s, p, k] = await Promise.all([
-        render.listServices().catch(() => []),
-        render.listPostgres().catch(() => []),
-        render.listKeyValue().catch(() => []),
-      ]);
-      setServices(s);
-      setPostgres(p);
-      setKeyvalue(k);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
+  useRealtimeInvalidate('user_backend_services', [['render-services'], ['render-postgres'], ['render-keyvalue']]);
+
+  const setQuery = (q: string) => {
+    const next = new URLSearchParams(params);
+    if (q) next.set('q', q);
+    else next.delete('q');
+    setParams(next, { replace: true });
+  };
+  const setRegion = (r: string) => {
+    const next = new URLSearchParams(params);
+    if (r === 'all') next.delete('region');
+    else next.set('region', r);
+    setParams(next, { replace: true });
   };
 
-  useEffect(() => { void load(); }, []);
+  const servicesQ = useQuery({
+    queryKey: ['render-services', user?.id],
+    queryFn: () => render.listServices().catch(() => [] as RenderService[]),
+    refetchInterval: 30_000,
+  });
+  const postgresQ = useQuery({
+    queryKey: ['render-postgres', user?.id],
+    queryFn: () => render.listPostgres().catch(() => [] as RenderPostgres[]),
+    refetchInterval: 30_000,
+  });
+  const keyvalueQ = useQuery({
+    queryKey: ['render-keyvalue', user?.id],
+    queryFn: () => render.listKeyValue().catch(() => [] as RenderKeyValue[]),
+    refetchInterval: 30_000,
+  });
 
-  const filterServices = (type: RenderService['type']) =>
-    services.filter((s) => s.type === type)
-      .filter((s) => !query || s.name.toLowerCase().includes(query.toLowerCase()) || s.repo?.toLowerCase().includes(query.toLowerCase()))
+  const services = servicesQ.data ?? [];
+  const postgres = postgresQ.data ?? [];
+  const keyvalue = keyvalueQ.data ?? [];
+  const loading = (servicesQ.isLoading && !servicesQ.data) || (postgresQ.isLoading && !postgresQ.data) || (keyvalueQ.isLoading && !keyvalueQ.data);
+  const refresh = () => {
+    void servicesQ.refetch();
+    void postgresQ.refetch();
+    void keyvalueQ.refetch();
+  };
+
+  const filteredServices = useMemo(() => {
+    if (tab === 'overview' || tab === 'postgres' || tab === 'keyvalue') return [];
+    return services
+      .filter((s) => s.type === tab)
+      .filter((s) => !query || s.name.toLowerCase().includes(query.toLowerCase()) || (s.repo || '').toLowerCase().includes(query.toLowerCase()))
       .filter((s) => region === 'all' || s.serviceDetails?.region === region);
+  }, [services, tab, query, region]);
 
   const regions = Array.from(new Set(services.map((s) => s.serviceDetails?.region).filter(Boolean) as string[]));
-
   const totalsByType = {
     web_service: services.filter((s) => s.type === 'web_service').length,
     static_site: services.filter((s) => s.type === 'static_site').length,
@@ -80,108 +112,142 @@ export default function Backend() {
     suspended: services.filter((s) => s.suspended === 'suspended').length,
   };
 
+  const isEmpty = !loading && services.length === 0 && postgres.length === 0 && keyvalue.length === 0;
+  const tabIsEmpty = !loading && (
+    (tab === 'postgres' && postgres.length === 0) ||
+    (tab === 'keyvalue' && keyvalue.length === 0) ||
+    (tab !== 'overview' && tab !== 'postgres' && tab !== 'keyvalue' && filteredServices.length === 0 && services.filter((s) => s.type === tab).length === 0)
+  );
+
+  const error = servicesQ.error || postgresQ.error || keyvalueQ.error;
+  const errMsg = error instanceof Error ? error.message : null;
+
+  const newAction = (type?: string) => {
+    const target = type ? `/dashboard/backend/new?type=${encodeURIComponent(type)}` : '/dashboard/backend/new';
+    navigate(target);
+  };
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-[220px] shrink-0 border-r border-border bg-card/30 p-3 md:block">
-        <p className="px-2 pb-2 text-[11px] uppercase tracking-widest text-muted-foreground">Backend</p>
-        <nav className="space-y-0.5">
-          {TABS.map((t) => (
-            <button
-              key={t.k}
-              onClick={() => setTab(t.k)}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition',
-                tab === t.k ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-              )}
-            >
-              <t.I className="h-4 w-4" />
-              <span className="min-w-0 flex-1 truncate">{t.label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <DashboardToolbar
-          eyebrow="Render backend"
-          title={TABS.find((t) => t.k === tab)?.label || 'Backend'}
-          subtitle={loading ? 'Loading from Render...' : `${services.length} services · ${postgres.length} Postgres · ${keyvalue.length} Key Value`}
-          actions={
-            <>
-              <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-                <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', loading && 'animate-spin')} />
-                Refresh
-              </Button>
-              <Button size="sm" onClick={() => navigate('/dashboard/backend/new')}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                New
-              </Button>
-            </>
-          }
-        />
-
-        <div className="space-y-4 p-4 md:p-6">
-          {error && (
-            <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-[12px] text-red-300">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>
-                <p className="font-medium">Unable to reach Render API</p>
-                <p className="font-mono text-[11px] opacity-80">{error}</p>
-              </div>
-            </div>
-          )}
-
-          {!loading && !error && services.length === 0 && postgres.length === 0 && keyvalue.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border p-12 text-center">
-              <Database className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="mt-3 text-[14px] font-medium">No backend resources yet</p>
-              <p className="mt-1 text-[12px] text-muted-foreground">Spin up a web service, worker, Postgres or Key Value instance to get started.</p>
-              <Button size="sm" className="mt-4" onClick={() => navigate('/dashboard/backend/new')}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> Create a backend service
-              </Button>
-            </div>
-          ) : (
+    <div className="flex min-w-0 flex-col">
+      <DashboardToolbar
+        eyebrow="Render backend"
+        title={TAB_LABELS[tab]}
+        subtitle={loading ? 'Loading from Render…' : `${services.length} services · ${postgres.length} Postgres · ${keyvalue.length} Key Value`}
+        actions={
           <>
-          {tab === 'overview' && (
-            <OverviewGrid totals={totalsByType} postgres={postgres.length} keyvalue={keyvalue.length} services={services} />
-          )}
-
-          {tab !== 'overview' && tab !== 'postgres' && tab !== 'keyvalue' && (
-            <>
-              <FilterBar query={query} onQueryChange={setQuery} placeholder="Search services...">
-                {regions.length > 0 && (
-                  <SelectFilter
-                    value={region}
-                    onChange={setRegion}
-                    label="Region"
-                    options={[{ value: 'all', label: 'All regions' }, ...regions.map((r) => ({ value: r, label: r }))]}
-                  />
-                )}
-              </FilterBar>
-              <ServiceTable
-                services={filterServices(
-                  tab === 'web' ? 'web_service' :
-                  tab === 'static' ? 'static_site' :
-                  tab === 'workers' ? 'background_worker' :
-                  tab === 'cron' ? 'cron_job' : 'private_service',
-                )}
-                loading={loading}
-                onAction={load}
-              />
-            </>
-          )}
-
-          {tab === 'postgres' && (
-            <PostgresTable items={postgres} loading={loading} />
-          )}
-
-          {tab === 'keyvalue' && (
-            <KeyValueTable items={keyvalue} loading={loading} />
-          )}
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+              <RefreshCw className={cn('mr-1.5 h-3.5 w-3.5', loading && 'animate-spin')} />
+              Refresh
+            </Button>
+            <Button size="sm" onClick={() => newAction(tab === 'overview' ? undefined : tab)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              {NEW_LABELS[tab] || 'New'}
+            </Button>
           </>
-          )}
-        </div>
+        }
+      />
+
+      <div className="space-y-4 p-4 md:p-6">
+        {errMsg && (
+          <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-[12px] text-red-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Unable to reach Render API</p>
+              <p className="font-mono text-[11px] opacity-80">{errMsg}</p>
+            </div>
+          </div>
+        )}
+
+        {loading && services.length === 0 && postgres.length === 0 && keyvalue.length === 0 ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-md border border-border bg-card" />
+            ))}
+          </div>
+        ) : isEmpty ? (
+          <EmptyBackendInline onCreate={() => newAction()} />
+        ) : tabIsEmpty ? (
+          <TabEmptyInline tab={tab} onCreate={() => newAction(tab)} />
+        ) : (
+          <>
+            {tab === 'overview' && (
+              <OverviewGrid totals={totalsByType} postgres={postgres.length} keyvalue={keyvalue.length} services={services} />
+            )}
+
+            {tab !== 'overview' && tab !== 'postgres' && tab !== 'keyvalue' && (
+              <>
+                <FilterBar query={query} onQueryChange={setQuery} placeholder="Search services...">
+                  {regions.length > 0 && (
+                    <SelectFilter
+                      value={region}
+                      onChange={setRegion}
+                      label="Region"
+                      options={[{ value: 'all', label: 'All regions' }, ...regions.map((r) => ({ value: r, label: r }))]}
+                    />
+                  )}
+                </FilterBar>
+                <ServiceTable services={filteredServices} loading={loading} onAction={refresh} />
+              </>
+            )}
+
+            {tab === 'postgres' && <PostgresTable items={postgres} loading={loading} />}
+            {tab === 'keyvalue' && <KeyValueTable items={keyvalue} loading={loading} />}
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+function EmptyBackendInline({ onCreate }: { onCreate: () => void }) {
+  const cards = [
+    { type: 'web_service', label: 'Web Service', desc: 'API, full-stack apps, anything that listens on a port.', I: Server },
+    { type: 'static_site', label: 'Static Site', desc: 'CDN-hosted static build (React, Vite, Hugo…).', I: Globe },
+    { type: 'background_worker', label: 'Background Worker', desc: 'Long-running process without HTTP.', I: Workflow },
+    { type: 'cron_job', label: 'Cron Job', desc: 'Run a command on a schedule.', I: Clock },
+    { type: 'postgres', label: 'Postgres', desc: 'Managed Postgres database.', I: Database },
+    { type: 'keyvalue', label: 'Key Value', desc: 'Redis-compatible cache.', I: KeyRound },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border border-border bg-card p-6">
+        <h2 className="text-[15px] font-semibold">Create your first backend service</h2>
+        <p className="mt-1 text-[12.5px] text-muted-foreground">Choose what to spin up. All services connect to Render under your account.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((c) => (
+          <Link
+            key={c.type}
+            to={`/dashboard/backend/new?type=${c.type}`}
+            className="group flex items-start gap-3 rounded-md border border-border bg-card p-4 transition hover:border-foreground/40"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted/40">
+              <c.I className="h-4 w-4 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[13.5px] font-semibold">{c.label}</h3>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
+              </div>
+              <p className="mt-1 text-[12px] leading-snug text-muted-foreground">{c.desc}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabEmptyInline({ tab, onCreate }: { tab: TabKey; onCreate: () => void }) {
+  const label = TAB_LABELS[tab];
+  return (
+    <div className="rounded-md border border-dashed border-border bg-card p-12 text-center">
+      <p className="text-[14px] font-medium">No {label.toLowerCase()} yet</p>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">Create one to get started — the form is pre-configured for {label.toLowerCase()}.</p>
+      <Button size="sm" className="mt-4 gap-1.5" onClick={onCreate}>
+        <Plus className="h-3.5 w-3.5" />
+        {NEW_LABELS[tab] || `Create ${label}`}
+      </Button>
     </div>
   );
 }
