@@ -1,4 +1,4 @@
-import { Fragment, memo } from "react";
+import React, { Fragment, memo } from "react";
 import { cn } from "@/lib/utils";
 
 // Minimal ANSI SGR parser → React spans with Tailwind classes.
