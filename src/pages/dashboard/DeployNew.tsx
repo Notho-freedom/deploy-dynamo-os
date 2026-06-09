@@ -172,13 +172,61 @@ export default function DeployNew() {
             </div>
 
             <div>
-              <p className="mb-3 text-[13px] text-muted-foreground">Looking for something else?</p>
-              <FeatureRow
-                icon={<Code2 className="h-4 w-4" />}
-                title="Create Empty Project"
-                description="Not connected yet. Import from GitHub for a real project source."
-                action={<Button disabled variant="outline" size="sm">Create</Button>}
-              />
+              <p className="mb-3 text-[13px] text-muted-foreground">Start from scratch</p>
+              <div className="space-y-3">
+                <FeatureRow
+                  icon={<Code2 className="h-4 w-4" />}
+                  title="Create Empty Project"
+                  description="Provision a project shell without a Git repo. You can connect one later."
+                  action={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!user || creatingEmpty}
+                      onClick={async () => {
+                        if (!user) return;
+                        setCreatingEmpty(true);
+                        try {
+                          const name = `project-${Math.random().toString(36).slice(2, 8)}`;
+                          const { data, error } = await supabase
+                            .from('user_projects')
+                            .insert({
+                              user_id: user.id,
+                              vercel_project_id: `local-${name}`,
+                              vercel_project_name: name,
+                              github_repo_full_name: '',
+                              github_repo_id: null,
+                              branch: 'main',
+                              framework: null,
+                              production_url: null,
+                            } as never)
+                            .select('vercel_project_id')
+                            .single();
+                          if (error) throw new Error(error.message);
+                          toast.success('Empty project created');
+                          navigate(`/dashboard/deploy/${(data as { vercel_project_id: string }).vercel_project_id}`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : String(e));
+                        } finally {
+                          setCreatingEmpty(false);
+                        }
+                      }}
+                    >
+                      {creatingEmpty ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Create'}
+                    </Button>
+                  }
+                />
+                <FeatureRow
+                  icon={<Globe className="h-4 w-4" />}
+                  title="Static Site (Render)"
+                  description="Deploy a static build (Vite, React, Hugo…) on Render's CDN."
+                  action={
+                    <Button size="sm" variant="outline" onClick={() => navigate('/dashboard/backend/new?type=static_site')}>
+                      Create
+                    </Button>
+                  }
+                />
+              </div>
             </div>
           </section>
         </div>
