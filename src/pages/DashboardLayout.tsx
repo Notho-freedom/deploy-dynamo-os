@@ -311,11 +311,30 @@ function DashboardSidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3">
-        <NavGroup items={productNav} pathname={pathname} onNavigate={onNavigate} />
-        <div className="my-3 h-px bg-border" />
-        <NavGroup items={configNav} pathname={pathname} onNavigate={onNavigate} />
-        <div className="my-3 h-px bg-border" />
-        <NavGroup items={platformNav} pathname={pathname} onNavigate={onNavigate} />
+        {pathname.startsWith('/dashboard/backend') ? (
+          <>
+            <Link
+              to="/dashboard"
+              onClick={onNavigate}
+              className="mb-3 flex h-9 items-center justify-between gap-2 rounded-md border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              <span className="inline-flex items-center gap-2">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+              </span>
+              <span className="text-[11px] uppercase tracking-widest text-foreground/80">Backend</span>
+            </Link>
+            <NavGroup items={backendNav} pathname={pathname + (typeof window !== 'undefined' ? window.location.search : '')} onNavigate={onNavigate} />
+          </>
+        ) : (
+          <>
+            <NavGroup items={productNav} pathname={pathname} onNavigate={onNavigate} />
+            <div className="my-3 h-px bg-border" />
+            <NavGroup items={configNav} pathname={pathname} onNavigate={onNavigate} />
+            <div className="my-3 h-px bg-border" />
+            <NavGroup items={platformNav} pathname={pathname} onNavigate={onNavigate} />
+          </>
+        )}
       </nav>
 
       <div className="border-t border-border p-2">
