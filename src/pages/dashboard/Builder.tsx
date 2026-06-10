@@ -238,7 +238,7 @@ export default function Builder() {
           <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)] overflow-hidden">
             <div className="overflow-y-auto border-r border-border p-2">
               <FileTree
-                entries={files.map<GhTreeEntry>((f) => ({ path: f.path, type: 'blob', sha: f.path, size: f.content.length }))}
+                entries={files.map<GhTreeEntry>((f) => ({ path: f.path, type: 'blob', sha: f.path, mode: '100644', size: f.content.length }))}
                 selectedPath={selected?.path}
                 onSelect={setSelectedPath}
               />
