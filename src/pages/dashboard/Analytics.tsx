@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { BarChart3, Globe, MousePointerClick, Users } from 'lucide-react';
 import { DashboardToolbar, EmptyPanel, SectionPanel, SelectFilter } from '@/components/dashboard/DashboardPrimitives';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useUserProjects } from '@/hooks/useDashboardData';
-import { vercelApi } from '@/lib/vercel';
+import { vercel } from '@/lib/vercel';
+import { humanizeApiError } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface AnalyticsTotals {
   pageviews?: { total?: number };
@@ -16,40 +20,31 @@ export default function Analytics() {
   const { projects } = useUserProjects();
   const [selected, setSelected] = useState<string>('');
   const [range, setRange] = useState<'24h' | '7d' | '30d'>('7d');
-  const [data, setData] = useState<AnalyticsTotals | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!selected && projects[0]) setSelected(projects[0].vercel_project_id);
   }, [projects, selected]);
 
-  useEffect(() => {
-    if (!selected) return;
-    let active = true;
-    async function load() {
-      setLoading(true);
-      setError(null);
+  const q = useQuery<AnalyticsTotals | null>({
+    queryKey: ['vercel-analytics', selected, range],
+    enabled: !!selected,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    queryFn: async () => {
       const now = Date.now();
       const from = now - ({ '24h': 24, '7d': 24 * 7, '30d': 24 * 30 }[range]) * 60 * 60 * 1000;
       try {
-        const res = await vercelApi<AnalyticsTotals>(`/v1/projects/${selected}/analytics`, {
-          query: { from, to: now },
-        });
-        if (active) setData(res);
+        return await vercel.getProjectAnalytics(selected, from, now);
       } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (active) setLoading(false);
+        toast.error(humanizeApiError(e));
+        throw e;
       }
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [selected, range]);
+    },
+  });
 
-  const totals = data;
+  const totals = q.data ?? null;
+  const loading = q.isLoading && !q.data;
 
   return (
     <div>
@@ -82,12 +77,6 @@ export default function Analytics() {
       <div className="space-y-5 px-4 py-6 md:px-6">
         {projects.length === 0 ? (
           <EmptyPanel icon={<BarChart3 className="h-9 w-9" />} title="No projects connected" description="Import a project to view its analytics." />
-        ) : error ? (
-          <EmptyPanel
-            icon={<BarChart3 className="h-9 w-9" />}
-            title="Analytics unavailable"
-            description={`${error}. Web Analytics may require enabling on this project or a paid Vercel plan.`}
-          />
         ) : (
           <>
             <div className="grid gap-4 md:grid-cols-4">
@@ -98,15 +87,15 @@ export default function Analytics() {
             </div>
 
             <SectionPanel title="Top Pages" meta={`${totals?.pages?.length ?? 0}`}>
-              <BreakdownTable rows={totals?.pages || []} />
+              <BreakdownTable rows={totals?.pages || []} loading={loading} />
             </SectionPanel>
 
             <SectionPanel title="Top Referrers" meta={`${totals?.referrers?.length ?? 0}`}>
-              <BreakdownTable rows={totals?.referrers || []} />
+              <BreakdownTable rows={totals?.referrers || []} loading={loading} />
             </SectionPanel>
 
             <SectionPanel title="Countries" meta={`${totals?.countries?.length ?? 0}`}>
-              <BreakdownTable rows={totals?.countries || []} />
+              <BreakdownTable rows={totals?.countries || []} loading={loading} />
             </SectionPanel>
           </>
         )}
@@ -122,12 +111,19 @@ function MetricCard({ label, value, icon, loading }: { label: string; value: num
         <span className="text-[12px]">{label}</span>
         {icon}
       </div>
-      <p className="text-[24px] font-semibold">{loading ? '…' : value ?? '—'}</p>
+      {loading ? <Skeleton className="h-7 w-20" /> : <p className="text-[24px] font-semibold tabular-nums">{value ?? '—'}</p>}
     </div>
   );
 }
 
-function BreakdownTable({ rows }: { rows: Array<{ key: string; total: number }> }) {
+function BreakdownTable({ rows, loading }: { rows: Array<{ key: string; total: number }>; loading: boolean }) {
+  if (loading && rows.length === 0) {
+    return (
+      <div className="space-y-1.5 p-4">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}
+      </div>
+    );
+  }
   if (rows.length === 0) {
     return <EmptyPanel className="rounded-none border-0 bg-transparent" title="No data for this range" />;
   }
