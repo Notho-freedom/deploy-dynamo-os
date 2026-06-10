@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SyntaxHighlighter, languageForFilename } from '@/components/SyntaxHighlighter';
 import { FileTree } from '@/components/FileTree';
+import type { GhTreeEntry } from '@/lib/github';
 import { cn, humanizeApiError } from '@/lib/utils';
 
 const templates = [
@@ -236,13 +237,17 @@ export default function Builder() {
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)] overflow-hidden">
             <div className="overflow-y-auto border-r border-border p-2">
-              <FileTree files={files.map((f) => f.path)} activePath={selected?.path ?? null} onSelect={setSelectedPath} />
+              <FileTree
+                entries={files.map<GhTreeEntry>((f) => ({ path: f.path, type: 'blob', sha: f.path, size: f.content.length }))}
+                selectedPath={selected?.path}
+                onSelect={setSelectedPath}
+              />
             </div>
             <div className="min-w-0 overflow-auto p-4">
               {selected ? (
                 <>
                   <p className="mb-2 font-mono text-[11px] text-muted-foreground">{selected.path}</p>
-                  <SyntaxHighlighter code={selected.content} language={selected.language} />
+                  <SyntaxHighlighter code={selected.content} filename={selected.path} />
                 </>
               ) : (
                 <p className="text-[12px] text-muted-foreground">Select a file</p>
