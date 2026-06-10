@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { UserProjectRecord } from '@/hooks/useDashboardData';
 import { decodeBase64Utf8, GhTreeEntry, github } from '@/lib/github';
 import { openLogStream, vercel, VercelDeployment, VercelDomain, VercelEnvVariable, VercelEvent, VercelProject } from '@/lib/vercel';
+import { useDeploymentLogStream } from '@/hooks/useDeploymentLogStream';
 import { Button } from '@/components/ui/button';
 import {
   DashboardToolbar,
@@ -409,88 +410,40 @@ function eventToLine(ev: VercelEvent): TerminalLine | null {
 }
 
 function LogsTab({ deployment }: { deployment: VercelDeployment }) {
-  const [events, setEvents] = useState<VercelEvent[]>([]);
-  const [streaming, setStreaming] = useState(false);
-  const seenRef = useRef<Set<string>>(new Set());
+  const [backfill, setBackfill] = useState<VercelEvent[]>([]);
+  const active = deployment.state === 'BUILDING' || deployment.state === 'QUEUED' || deployment.state === 'INITIALIZING';
+  const { lines: streamLines, live } = useDeploymentLogStream(deployment.uid, { source: 'vercel', active });
 
+  // Backfill via REST so historic lines are visible even after build completes.
   useEffect(() => {
     let cancelled = false;
-    let close: (() => void) | null = null;
-    setEvents([]);
-    seenRef.current = new Set();
-
-    async function start() {
-      // 1. Backfill via REST so we don't lose existing logs.
+    setBackfill([]);
+    void (async () => {
       try {
         const initial = (await vercel.getDeploymentEvents(deployment.uid)) || [];
         if (cancelled) return;
-        const arr = Array.isArray(initial) ? initial : [];
-        arr.forEach((e) => {
-          const key = `${e.created}-${e.payload?.text?.slice(0, 32) ?? ''}-${e.type}`;
-          seenRef.current.add(key);
-        });
-        setEvents(arr);
-      } catch {
-        // ignore
-      }
+        if (Array.isArray(initial)) setBackfill(initial);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [deployment.uid]);
 
-      // 2. Open SSE for live updates (only while building).
-      if (deployment.state === 'BUILDING' || deployment.state === 'QUEUED' || deployment.state === 'INITIALIZING') {
-        // Pass the supabase access token via query because EventSource cannot set headers.
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token || cancelled) return;
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const url = `https://${projectId}.supabase.co/functions/v1/vercel-logs-stream?id=${encodeURIComponent(deployment.uid)}&token=${encodeURIComponent(token)}`;
-        try {
-          const es = new EventSource(url);
-          setStreaming(true);
-          es.onmessage = (ev) => {
-            if (!ev.data) return;
-            try {
-              const parsed = JSON.parse(ev.data) as VercelEvent;
-              const key = `${parsed.created}-${parsed.payload?.text?.slice(0, 32) ?? ''}-${parsed.type}`;
-              if (seenRef.current.has(key)) return;
-              seenRef.current.add(key);
-              setEvents((prev) => [...prev, parsed]);
-            } catch {
-              // ignore non-JSON
-            }
-          };
-          es.onerror = () => {
-            setStreaming(false);
-            es.close();
-          };
-          close = () => {
-            setStreaming(false);
-            es.close();
-          };
-        } catch {
-          setStreaming(false);
-        }
-      }
-    }
-
-    void start();
-    return () => {
-      cancelled = true;
-      if (close) close();
-    };
-  }, [deployment.uid, deployment.state]);
-
-  const lines = useMemo(
-    () =>
-      (events
-        .map(eventToLine)
-        .filter(Boolean) as TerminalLine[]),
-    [events],
-  );
+  const terminalLines = useMemo<TerminalLine[]>(() => {
+    const backfillLines = backfill.map(eventToLine).filter(Boolean) as TerminalLine[];
+    const liveLines: TerminalLine[] = streamLines.map((l) => {
+      let ts = '--:--:--';
+      try { ts = new Date(l.ts).toISOString().slice(11, 19); } catch { /* noop */ }
+      const tone: TerminalLine['tone'] = l.level === 'error' ? 'error' : l.level === 'warn' ? 'warning' : 'default';
+      return { tone, text: `${ts}  ${l.text.replace(/\n+$/, '')}` };
+    });
+    return [...backfillLines, ...liveLines];
+  }, [backfill, streamLines]);
 
   return (
-    <SectionPanel title="Build Logs" meta={`${lines.length} lines`}>
+    <SectionPanel title="Build Logs" meta={`${terminalLines.length} lines${live ? ' · ● Live' : ''}`}>
       <Terminal
-        lines={lines}
-        streaming={streaming}
+        lines={terminalLines}
+        streaming={live}
         prompt={`build · ${deployment.name}`}
         height="h-[640px]"
         className="rounded-none border-0"
