@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Sparkles, Send, FileCode2, Wrench, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { SyntaxHighlighter, languageForFilename as _lang } from '@/components/SyntaxHighlighter';
+import { SyntaxHighlighter, languageForFilename } from '@/components/SyntaxHighlighter';
 import { FileTree } from '@/components/FileTree';
 import type { GhTreeEntry } from '@/lib/github';
 import { cn, humanizeApiError } from '@/lib/utils';
