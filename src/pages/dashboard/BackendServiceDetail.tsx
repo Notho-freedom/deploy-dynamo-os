@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Loader2, RefreshCw, ExternalLink, PauseCircle, PlayCircle, RotateCcw, Trash2,
@@ -11,7 +11,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DashboardToolbar } from '@/components/dashboard/DashboardPrimitives';
 import { Terminal, TerminalLine } from '@/components/Terminal';
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip as RTooltip, CartesianGrid } from 'recharts';
-import { render, RenderService, RenderDeploy, RenderEnvVar, RenderCustomDomain, openRenderLogStream } from '@/lib/render';
+import { render, RenderService, RenderDeploy, RenderEnvVar, RenderCustomDomain } from '@/lib/render';
+import { useDeploymentLogStream } from '@/hooks/useDeploymentLogStream';
 import { supabase } from '@/integrations/supabase/client';
 import { safeFormatDistance, cn, shortDeploymentId } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -279,21 +280,13 @@ function DeploysTab({ serviceId }: { serviceId: string }) {
 }
 
 function LogsTab({ resource }: { resource: string }) {
-  const [lines, setLines] = useState<TerminalLine[]>([]);
   const [type, setType] = useState<'app' | 'build' | 'request'>('app');
-  const closer = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    setLines([]);
-    closer.current?.();
-    closer.current = openRenderLogStream(resource, type, (entry) => {
-      const lvl = (entry.level || '').toLowerCase();
-      const tone: TerminalLine['tone'] = lvl === 'error' ? 'error' : lvl === 'warning' || lvl === 'warn' ? 'warning' : undefined;
-      const ts = entry.timestamp ? `[${new Date(entry.timestamp).toLocaleTimeString()}] ` : '';
-      setLines((prev) => [...prev.slice(-1000), { text: `${ts}${entry.message}`, tone }]);
-    });
-    return () => closer.current?.();
-  }, [resource, type]);
+  const { lines: streamLines, live } = useDeploymentLogStream(resource, { source: 'render', renderType: type, active: true });
+  const lines = useMemo<TerminalLine[]>(() => streamLines.map((l) => {
+    const ts = l.ts ? `[${new Date(l.ts).toLocaleTimeString()}] ` : '';
+    const tone: TerminalLine['tone'] = l.level === 'error' ? 'error' : l.level === 'warn' ? 'warning' : undefined;
+    return { text: `${ts}${l.text}`, tone };
+  }), [streamLines]);
 
   return (
     <div className="space-y-3">
@@ -303,8 +296,12 @@ function LogsTab({ resource }: { resource: string }) {
             {t}
           </button>
         ))}
+        <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className={cn('h-1.5 w-1.5 rounded-full', live ? 'animate-pulse bg-emerald-400' : 'bg-zinc-500')} />
+          {live ? 'Live' : 'Connecting…'}
+        </span>
       </div>
-      <Terminal lines={lines} streaming height="h-[500px]" prompt={`render logs --type=${type}`} />
+      <Terminal lines={lines} streaming={live} height="h-[500px]" prompt={`render logs --type=${type}`} />
     </div>
   );
 }

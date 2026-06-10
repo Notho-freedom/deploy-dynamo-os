@@ -1,33 +1,55 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/lib/i18n';
-import { useApp } from '@/lib/store';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Send, Paperclip, Monitor, Smartphone, Tablet as TabletIcon, RefreshCw, Code2, Eye, Terminal as TerminalIcon, Zap } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Sparkles, Send, FileCode2, Wrench, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { SyntaxHighlighter, languageForFilename } from '@/components/SyntaxHighlighter';
+import { FileTree } from '@/components/FileTree';
+import type { GhTreeEntry } from '@/lib/github';
+import { cn, humanizeApiError } from '@/lib/utils';
 
 const templates = [
-  { name: 'SaaS Dashboard', prompt: 'A modern SaaS dashboard with auth, billing, and analytics' },
-  { name: 'Marketplace', prompt: 'A marketplace for African artisans with Mobile Money checkout' },
-  { name: 'Landing page', prompt: 'A bold editorial landing page for a fintech startup' },
-  { name: 'Blog', prompt: 'A minimal blog with MDX, RSS, and newsletter capture' },
-  { name: 'Mobile App', prompt: 'A React Native style PWA for ride-hailing in Lagos' },
-  { name: 'API + Docs', prompt: 'A REST API with OpenAPI docs and SDK generation' },
+  { name: 'SaaS Dashboard', prompt: 'A modern SaaS dashboard with auth, billing and analytics.' },
+  { name: 'Marketplace', prompt: 'A marketplace for African artisans with Mobile Money checkout.' },
+  { name: 'Landing page', prompt: 'A bold editorial landing page for a fintech startup.' },
+  { name: 'Blog', prompt: 'A minimal blog with MDX, RSS and newsletter capture.' },
+  { name: 'API + Docs', prompt: 'A REST API with OpenAPI docs and SDK generation.' },
 ];
 
 interface Msg { role: 'user' | 'assistant'; text: string; streaming?: boolean }
+interface ParsedFile { path: string; content: string; language: string }
+
+// Parse fenced code blocks of the form ```lang path/to/file\n…\n```
+function parseFiles(markdown: string): ParsedFile[] {
+  const out: ParsedFile[] = [];
+  const re = /```(\w+)?\s+([^\s`][^\n`]*?)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const [, , rawPath, body] = m;
+    const path = rawPath.trim();
+    if (!path.includes('/') && !path.includes('.')) continue;
+    out.push({ path, content: body.replace(/\n$/, ''), language: languageForFilename(path) });
+  }
+  // Dedupe — last write wins.
+  const seen = new Map<string, ParsedFile>();
+  for (const f of out) seen.set(f.path, f);
+  return Array.from(seen.values());
+}
 
 export default function Builder() {
   const { lang } = useI18n();
-  const addProject = useApp((s) => s.addProject);
   const [started, setStarted] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
-  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [view, setView] = useState<'preview' | 'code' | 'console'>('preview');
-  const [files, setFiles] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const assistantText = messages.filter((m) => m.role === 'assistant').map((m) => m.text).join('\n\n');
+  const files = useMemo(() => parseFiles(assistantText), [assistantText]);
+  const selected = files.find((f) => f.path === selectedPath) ?? files[files.length - 1] ?? null;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -37,8 +59,7 @@ export default function Builder() {
     if (!prompt.trim()) return;
     setStarted(true);
     setMessages([{ role: 'user', text: prompt }]);
-    streamReply(prompt, [{ role: 'user', content: prompt }]);
-    addProject({ name: 'new-project-' + Math.random().toString(36).slice(2, 5), framework: 'nextjs', template: 'ai', status: 'building' });
+    void streamReply([{ role: 'user', content: prompt }]);
     setInput('');
   };
 
@@ -47,17 +68,17 @@ export default function Builder() {
     const next: Msg = { role: 'user', text: input };
     setMessages((m) => [...m, next]);
     const history = [...messages, next].map((m) => ({ role: m.role, content: m.text }));
-    streamReply(input, history);
+    void streamReply(history);
     setInput('');
   };
 
-  const streamReply = async (prompt: string, history: Array<{ role: 'user' | 'assistant'; content: string }>) => {
+  const streamReply = async (history: Array<{ role: 'user' | 'assistant'; content: string }>) => {
     setBusy(true);
     setMessages((m) => [...m, { role: 'assistant', text: '', streaming: true }]);
 
-    const projectRef = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID;
+    const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID;
     const url = `https://${projectRef}.supabase.co/functions/v1/builder-chat`;
-    const anon = (import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY;
+    const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
     try {
       const res = await fetch(url, {
@@ -65,12 +86,10 @@ export default function Builder() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${anon}`, apikey: anon },
         body: JSON.stringify({ messages: history }),
       });
-
       if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({ error: 'Network error' }));
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
@@ -97,23 +116,20 @@ export default function Builder() {
                 return [...m.slice(0, -1), { ...last, text: acc }];
               });
             }
-          } catch { /* ignore parse errors on partial chunks */ }
+          } catch { /* ignore partial json */ }
         }
       }
-
       setMessages((m) => {
         const last = m[m.length - 1];
         if (!last) return m;
         return [...m.slice(0, -1), { ...last, streaming: false }];
       });
-      setFiles((f) => Array.from(new Set([...f, 'app/(marketing)/page.tsx', 'app/api/momo/route.ts', 'lib/db/schema.ts'])));
-    } catch (e: any) {
-      const errMsg = e?.message || 'unknown';
-      toast.error(lang === 'fr' ? `Erreur IA : ${errMsg}` : `AI error: ${errMsg}`);
+    } catch (e) {
+      toast.error(humanizeApiError(e));
       setMessages((m) => {
         const last = m[m.length - 1];
         if (!last) return m;
-        return [...m.slice(0, -1), { ...last, streaming: false, text: last.text || (lang === 'fr' ? '_(la génération a échoué — réessayez dans un instant.)_' : '_(generation failed — try again in a moment.)_') }];
+        return [...m.slice(0, -1), { ...last, streaming: false, text: last.text || '_(generation failed — try again)_' }];
       });
     } finally {
       setBusy(false);
@@ -122,13 +138,13 @@ export default function Builder() {
 
   if (!started) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center max-w-3xl mx-auto text-center">
-        <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-4">{lang === 'fr' ? 'Project Builder' : 'Project Builder'}</p>
-        <h1 className="font-editorial text-5xl md:text-6xl tracking-tight mb-3 text-balance">
+      <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
+        <p className="mb-4 text-[11px] uppercase tracking-widest text-muted-foreground">Project Builder</p>
+        <h1 className="font-editorial mb-3 text-balance text-5xl tracking-tight md:text-6xl">
           {lang === 'fr' ? <>Que voulez-vous <em className="italic text-primary">construire</em> ?</> : <>What do you want to <em className="italic text-primary">build</em>?</>}
         </h1>
-        <p className="text-muted-foreground text-[14px] mb-10 max-w-md">
-          {lang === 'fr' ? 'Décrivez votre idée. NebulaOS génère, configure et déploie.' : 'Describe your idea. NebulaOS generates, configures and ships it.'}
+        <p className="mb-10 max-w-md text-[14px] text-muted-foreground">
+          {lang === 'fr' ? 'Décrivez votre idée. L\'IA planifie les fichiers en streaming.' : 'Describe your idea. The AI plans the files in real time.'}
         </p>
         <div className="w-full border border-border p-3">
           <textarea
@@ -137,21 +153,18 @@ export default function Builder() {
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) begin(input); }}
             rows={4}
             placeholder={lang === 'fr' ? 'Une marketplace pour artisans avec paiement Mobile Money…' : 'A marketplace for artisans with Mobile Money checkout…'}
-            className="w-full bg-transparent outline-none resize-none text-[14px] placeholder:text-muted-foreground"
+            className="w-full resize-none bg-transparent text-[14px] outline-none placeholder:text-muted-foreground"
           />
-          <div className="flex items-center gap-2 mt-2">
-            <button className="text-muted-foreground hover:text-foreground"><Paperclip className="h-4 w-4" /></button>
-            <span className="text-[11px] text-muted-foreground font-mono">⌘+enter to send</span>
-            <Button disabled={!input.trim()} onClick={() => begin(input)} className="ml-auto gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Generate</Button>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="font-mono text-[11px] text-muted-foreground">⌘+enter to send</span>
+            <Button disabled={!input.trim()} onClick={() => begin(input)} className="ml-auto gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" /> Generate
+            </Button>
           </div>
         </div>
-        <div className="mt-8 flex flex-wrap gap-2 justify-center">
+        <div className="mt-8 flex flex-wrap justify-center gap-2">
           {templates.map((t) => (
-            <button
-              key={t.name}
-              onClick={() => begin(t.prompt)}
-              className="px-3 py-1.5 border border-border hover:border-foreground rounded-full text-[12px] text-muted-foreground hover:text-foreground transition"
-            >
+            <button key={t.name} onClick={() => begin(t.prompt)} className="rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground transition hover:border-foreground hover:text-foreground">
               {t.name}
             </button>
           ))}
@@ -160,133 +173,88 @@ export default function Builder() {
     );
   }
 
-  const deviceWidth = device === 'desktop' ? '100%' : device === 'tablet' ? 768 : 375;
-
   return (
-    <div className="grid lg:grid-cols-2 gap-0 -m-6 -mt-8 h-[calc(100vh-3rem)] border-t border-border">
+    <div className="grid h-[calc(100vh-3.5rem)] grid-cols-1 border-t border-border lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       {/* Chat */}
-      <div className="flex flex-col border-r border-border min-h-0">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-2">
+      <div className="flex min-h-0 flex-col border-r border-border">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-3">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[12px] font-mono">conversation</span>
-          <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
-            <Zap className="h-3 w-3 text-success" />
-            gemini-2.5-flash · live
-          </span>
+          <span className="font-mono text-[12px]">conversation</span>
+          <span className="ml-auto font-mono text-[11px] text-muted-foreground">gemini · streaming</span>
         </div>
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5">
           {messages.map((m, i) => (
             <div key={i} className={m.role === 'user' ? 'ml-auto max-w-md' : 'max-w-md'}>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{m.role === 'user' ? 'You' : 'Nebula'}</p>
-              <div className={`text-[13.5px] whitespace-pre-wrap leading-relaxed ${m.role === 'user' ? 'bg-muted/40 px-3 py-2 rounded-md' : ''}`}>
+              <p className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">{m.role === 'user' ? 'You' : 'Nebula'}</p>
+              <div className={cn('whitespace-pre-wrap text-[13.5px] leading-relaxed', m.role === 'user' && 'rounded-md bg-muted/40 px-3 py-2')}>
                 {m.text}
-                {m.streaming && <span className="inline-block w-1.5 h-3.5 bg-foreground align-middle animate-blink ml-0.5" />}
+                {m.streaming && <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-emerald-400 align-middle" />}
               </div>
             </div>
           ))}
+          {busy && messages[messages.length - 1]?.text === '' && (
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-3 w-5/6" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          )}
         </div>
-        <div className="p-3 border-t border-border">
-          <div className="border border-border p-2.5 flex items-end gap-2">
+        <div className="border-t border-border p-3">
+          <div className="flex items-end gap-2 border border-border p-2.5">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
               rows={1}
               placeholder={lang === 'fr' ? 'Continuer la conversation…' : 'Continue the conversation…'}
-              className="flex-1 bg-transparent outline-none resize-none text-[13px]"
+              className="flex-1 resize-none bg-transparent text-[13px] outline-none"
             />
-            <button onClick={send} disabled={busy || !input.trim()} className="text-primary hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"><Send className="h-4 w-4" /></button>
+            <button onClick={send} disabled={busy || !input.trim()} className="text-primary hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Preview */}
-      <div className="flex flex-col min-h-0 bg-[#0a0a0c]">
-        <div className="h-10 px-4 border-b border-border flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            {(['preview', 'code', 'console'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] capitalize font-mono rounded transition ${view === v ? 'bg-muted/60 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {v === 'preview' ? <Eye className="h-3 w-3" /> : v === 'code' ? <Code2 className="h-3 w-3" /> : <TerminalIcon className="h-3 w-3" />}
-                {v}
-              </button>
-            ))}
-          </div>
-          <div className="ml-auto flex items-center gap-1">
-            {[
-              { k: 'desktop', I: Monitor },
-              { k: 'tablet', I: TabletIcon },
-              { k: 'mobile', I: Smartphone },
-            ].map((d) => (
-              <button key={d.k} onClick={() => setDevice(d.k as any)} className={`p-1.5 rounded transition ${device === d.k ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                <d.I className="h-3.5 w-3.5" />
-              </button>
-            ))}
-            <button className="ml-2 p-1.5 text-muted-foreground hover:text-foreground"><RefreshCw className="h-3.5 w-3.5" /></button>
-          </div>
+      {/* Plan & Files (real, parsed from stream) */}
+      <div className="flex min-h-0 flex-col bg-[#0a0a0c]">
+        <div className="flex h-10 items-center gap-3 border-b border-border px-4">
+          <FileCode2 className="h-3.5 w-3.5 text-primary" />
+          <span className="font-mono text-[12px]">plan & files</span>
+          <span className="ml-auto font-mono text-[11px] text-muted-foreground">{files.length} file{files.length === 1 ? '' : 's'}</span>
         </div>
-        <div className="px-4 py-2 border-b border-border flex items-center gap-2 bg-background">
-          <span className="h-2 w-2 rounded-full bg-success" />
-          <span className="font-mono text-[11px] text-muted-foreground truncate">https://preview-a8f2.nebula.app</span>
-        </div>
-        {view === 'preview' && (
-          <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
-            <div style={{ width: deviceWidth, maxWidth: '100%' }} className="bg-background border border-border min-h-[420px] transition-all">
-              <FakeAppPreview />
+        {files.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center p-8 text-center">
+            <div className="max-w-xs">
+              <Wrench className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+              <p className="text-[13px] font-medium">Awaiting AI plan</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">
+                When the assistant produces files in fenced code blocks (with a path on the opening line), they appear here in real time.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-[200px_minmax(0,1fr)] overflow-hidden">
+            <div className="overflow-y-auto border-r border-border p-2">
+              <FileTree
+                entries={files.map<GhTreeEntry>((f) => ({ path: f.path, type: 'blob', sha: f.path, mode: '100644', size: f.content.length }))}
+                selectedPath={selected?.path}
+                onSelect={setSelectedPath}
+              />
+            </div>
+            <div className="min-w-0 overflow-auto p-4">
+              {selected ? (
+                <>
+                  <p className="mb-2 font-mono text-[11px] text-muted-foreground">{selected.path}</p>
+                  <SyntaxHighlighter code={selected.content} filename={selected.path} />
+                </>
+              ) : (
+                <p className="text-[12px] text-muted-foreground">Select a file</p>
+              )}
             </div>
           </div>
         )}
-        {view === 'code' && (
-          <div className="flex-1 grid grid-cols-[180px,1fr] overflow-hidden">
-            <div className="border-r border-border overflow-y-auto p-3 text-[11.5px] font-mono space-y-0.5">
-              <p className="text-muted-foreground mb-2">FILES</p>
-              {(files.length ? files : ['app/page.tsx']).map((f) => (
-                <div key={f} className="text-muted-foreground hover:text-foreground cursor-pointer truncate">{f}</div>
-              ))}
-            </div>
-            <pre className="overflow-auto p-4 text-[12px] font-mono text-foreground/90"><code>{`export default function Page() {
-  return (
-    <main className="min-h-screen p-10">
-      <h1 className="font-editorial text-5xl">Ankara Shop</h1>
-      <p className="text-muted-foreground mt-4">
-        Découvrez nos pagnes faits main, livraison partout en Afrique.
-      </p>
-      <Checkout provider="momo" />
-    </main>
-  );
-}`}</code></pre>
-          </div>
-        )}
-        {view === 'console' && (
-          <div className="flex-1 overflow-auto p-4 font-mono text-[12px] text-muted-foreground space-y-1">
-            <p>[09:42:18] Listening on 0.0.0.0:3000</p>
-            <p>[09:42:19] Compiled / in 412ms</p>
-            <p>[09:42:21] GET / 200 in 38ms</p>
-            <p className="text-warning">[09:42:24] [warn] images.unsplash.com — large LCP</p>
-            <p>[09:42:27] HMR update applied</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FakeAppPreview() {
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-8">
-        <span className="font-editorial text-xl">ankara.shop</span>
-        <span className="font-mono text-[10px] text-muted-foreground">CART · 0</span>
-      </div>
-      <h1 className="font-editorial text-3xl mb-2">Pagnes faits main, depuis Abidjan.</h1>
-      <p className="text-[12px] text-muted-foreground mb-6">Livraison Mobile Money disponible.</p>
-      <div className="grid grid-cols-3 gap-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="aspect-square bg-gradient-to-br from-primary/30 to-accent/20 border border-border" />
-        ))}
       </div>
     </div>
   );
