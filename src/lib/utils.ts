@@ -35,3 +35,21 @@ export function shortDeploymentId(uid: string | undefined | null): string {
   if (uid.startsWith("dpl_")) return uid.length <= 16 ? uid : `dpl_${uid.slice(4, 11)}`;
   return uid.length <= 12 ? uid : `${uid.slice(0, 10)}…`;
 }
+
+/** Map raw API errors (Vercel/Render/Supabase) to a short, user-friendly sentence. */
+export function humanizeApiError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (!msg) return "Something went wrong. Please try again.";
+  const code = msg.match(/\b(401|403|404|409|410|422|429|5\d{2})\b/)?.[1];
+  switch (code) {
+    case "401": return "Authentication required. Please sign in again.";
+    case "403": return "You don't have access to this resource.";
+    case "404": return "This resource was not found or was removed.";
+    case "409": return "This resource conflicts with an existing one.";
+    case "410": return "This resource is no longer available.";
+    case "422": return "The request was rejected. Check the input and retry.";
+    case "429": return "Rate limit reached. Please wait a moment and retry.";
+  }
+  if (code && code.startsWith("5")) return "Upstream service is temporarily unavailable. Retrying...";
+  return msg.replace(/^(Vercel|Render|Supabase)\s*\d+:\s*/, "").slice(0, 240);
+}

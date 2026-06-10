@@ -201,6 +201,11 @@ export const vercel = {
   listRedirects: (projectId: string) =>
     vercelApi<any[]>(`/v9/projects/${projectId}/redirects`, { silent: [403, 404] }),
   domainCerts: (domain: string) => vercelApi<any[]>(`/v4/domains/${domain}/certs`, { silent: [403, 404] }),
+  // Usage / analytics
+  getUsage: (from?: number, to?: number) =>
+    vercelApi<any>('/v1/integrations/billing/usage', { query: { from, to }, silent: [403, 404] }),
+  getProjectAnalytics: (projectId: string, from: number, to: number) =>
+    vercelApi<any>(`/v1/projects/${projectId}/analytics`, { query: { from, to }, silent: [403, 404] }),
 };
 
 // Open an SSE stream for build logs via the dedicated edge function.
