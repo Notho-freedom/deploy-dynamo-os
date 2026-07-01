@@ -18,12 +18,17 @@ export interface GhBranch { name: string; commit: { sha: string } }
 export interface GhTreeEntry { path: string; mode: string; type: 'blob' | 'tree' | 'commit'; sha: string; size?: number; url?: string }
 export interface GhTree { sha: string; tree: GhTreeEntry[]; truncated: boolean }
 
+export class GithubReauthError extends Error {
+  constructor() { super('GitHub connection expired — please reconnect.'); this.name = 'GithubReauthError'; }
+}
+
 export async function ghApi<T = any>(path: string, opts: { method?: string; query?: Record<string, any>; body?: any } = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke('github-api', {
     body: { path, method: opts.method || 'GET', query: opts.query, body: opts.body },
   });
   if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
+  if (data?.needsReauth || data?.status === 401) throw new GithubReauthError();
+  if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
   if (data?.status >= 400) throw new Error(`GitHub ${data.status}: ${typeof data.data === 'object' ? data.data?.message || '' : ''}`);
   return data.data as T;
 }
