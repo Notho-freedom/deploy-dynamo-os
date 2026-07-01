@@ -12,7 +12,9 @@ const ALLOWED = [
   /^\/orgs\/[^/]+\/repos(\?.*)?$/,
   /^\/repos\/[^/]+\/[^/]+$/,
   /^\/repos\/[^/]+\/[^/]+\/branches(\?.*)?$/,
-  /^\/repos\/[^/]+\/[^/]+\/contents\/[^?]*(\?.*)?$/,
+  /^\/repos\/[^/]+\/[^/]+\/contents\/.*$/,
+  /^\/repos\/[^/]+\/[^/]+\/git\/trees\/[^/]+(\?.*)?$/,
+  /^\/repos\/[^/]+\/[^/]+\/commits(\/[^/]+)?(\?.*)?$/,
 ];
 
 Deno.serve(async (req) => {
