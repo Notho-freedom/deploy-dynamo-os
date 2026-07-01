@@ -12,7 +12,9 @@ const ALLOWED = [
   /^\/orgs\/[^/]+\/repos(\?.*)?$/,
   /^\/repos\/[^/]+\/[^/]+$/,
   /^\/repos\/[^/]+\/[^/]+\/branches(\?.*)?$/,
-  /^\/repos\/[^/]+\/[^/]+\/contents\/[^?]*(\?.*)?$/,
+  /^\/repos\/[^/]+\/[^/]+\/contents\/.*$/,
+  /^\/repos\/[^/]+\/[^/]+\/git\/trees\/[^/]+(\?.*)?$/,
+  /^\/repos\/[^/]+\/[^/]+\/commits(\/[^/]+)?(\?.*)?$/,
 ];
 
 Deno.serve(async (req) => {
@@ -63,6 +65,9 @@ Deno.serve(async (req) => {
     const text = await r.text();
     let data: unknown;
     try { data = JSON.parse(text); } catch { data = text; }
+    if (r.status === 401) {
+      return json({ status: 401, error: 'GitHub token expired or revoked', needsReauth: true, data }, 200);
+    }
     return json({ status: r.status, data }, 200);
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
