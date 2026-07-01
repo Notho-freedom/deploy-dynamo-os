@@ -1,132 +1,59 @@
-# Phase 6 — Closing every gap from the previous loop
+## Objective
 
-Audit constatant ce qui n'est PAS encore livré malgré les phases précédentes :
+Stabiliser l'application de bout en bout : réparer Render (500 sur `render-deploy`), corriger l'auth GitHub (403 sur `github-api`), résoudre les instabilités UI et de chargement, terminer les vues « Deployment details », puis exécuter une passe de tests réels avant de rendre un briefing honnête de ce qui est opérationnel.
 
-| Sujet | État actuel | À faire |
-|---|---|---|
-| Backend form multi-étapes | 2 étapes (type / config) avec ~15 champs sur une seule page | Vrai wizard 5 étapes + tests CRUD |
-| Builder | Preview fictif `FakeAppPreview`, chat custom, pas d'AI Elements | Refonte complète |
-| UI Generator | Cartes pricing fictives codées en dur | Refonte (vraies variantes IA) |
-| Logs déploiement temps réel | SSE existe sur `Logs.tsx` global et `DeployDetail`, mais pas instantané ligne par ligne pendant un build sur la page projet | Brancher SSE dès l'ouverture, append token-par-token |
-| Observability | 4 cartes "—" en dur + section déploiements | Vraies métriques live + skeletons |
-| Analytics | Fetch `useEffect` qui passe par empty-state si erreur | Migration `useQuery` + cache instantané |
+## Root-cause snapshot
 
-## 1. Backend — wizard multi-étapes (`BackendNew.tsx`)
+- `render-deploy` 500 : trois causes possibles selon les logs à capturer — (a) `RENDER_OWNER_ID` non passé pour les types `service` (payload envoyé mais silencieusement rejeté par Render si `ownerId` absent selon le type), (b) `serviceDetails.env` requis à `'docker'` mais un `image.ownerId` manquant pour Docker, (c) `envVars` mal filtrés quand le tableau contient des lignes vides.
+- `github-api` 403 : renvoyé par la fonction elle-même quand `connected_accounts` n'a pas de ligne pour l'utilisateur (code 412) OU quand le token GitHub a expiré (Render répond 401 → nous renvoyons `status: 401` dans `data`). Le 403 vient du proxy Lovable préview quand la session Supabase est expirée — il faut auto-refresh et re-tenter.
+- `trackevents` 403 et WebSocket realtime 403 : bruit du preview Lovable (sans lien avec le code), à ignorer.
+- Vues lentes / data incomplètes : plusieurs pages font encore des `await` séquentiels et n'utilisent pas `useQuery` avec `placeholderData`. `DeployDetail` re-fetch la liste des déploiements à chaque tick de polling.
 
-Utiliser le composant `<Stepper>` existant. 5 étapes :
+## Scope of work
 
-```text
-[1 Type] → [2 Source] → [3 Build & Runtime] → [4 Env vars] → [5 Review]
-```
+### 1. Backend — fiabiliser les edge functions
+- `render-deploy` : validation Zod du body, log détaillé de la réponse Render sur échec, retour du `detail` complet au client, gestion explicite `env='docker'` (require `image.ownerId` ou `dockerfilePath`), filtrage des `envVars` vides, fallback `ownerId` obligatoire, retour `503` clair si `RENDER_API_KEY` répond `401`.
+- `render-api` : sur `401`/`403` amont, propager le message Render (au lieu de `Render 401: ...` brut).
+- `github-api` : détecter `status === 401` amont → marquer `connected_accounts` comme expiré et renvoyer `{ needsReauth: true }`. Front réagit avec un toast « Reconnecter GitHub ».
+- Ajouter un helper commun `withUser(req)` pour éliminer la duplication et garantir un 401 propre partout.
 
-- Étape 1 : grille des 7 types (déjà là).
-- Étape 2 : repo GitHub + branche + root dir (skipped si Postgres/KV).
-- Étape 3 : runtime + build/start command + publish dir + schedule cron + region + plan.
-- Étape 4 : variables d'environnement (avec import `.env` paste).
-- Étape 5 : récap lisible + bouton "Create". Erreurs affichées par étape avant `Next`.
-- Persister l'état du wizard en `sessionStorage` pour ne pas perdre la saisie.
+### 2. Front — session & résilience
+- `src/integrations/supabase/client.ts` déjà OK. Ajouter un intercepteur global dans `src/lib/utils.ts::invokeFn()` qui : (a) refresh la session si `access_token` expire dans <60 s, (b) retry une fois sur 401, (c) route les erreurs vers `humanizeApiError`.
+- Migrer les derniers `useEffect + setData` restants (`Deploy.tsx`, `DeployNew.tsx`, `Domains.tsx`, `Monitoring.tsx`, `BackendServiceDetail.tsx` onglet Events/Env) vers `useQuery` avec `placeholderData: keepPreviousData` et skeletons.
+- `DeployDetail.tsx` : séparer la query « deployment » de la query « logs » ; ne plus invalider la liste sur chaque tick.
 
-## 2. Tests CRUD edge functions
+### 3. Deployment detail — finir la vue
+Onglets manquants ou incomplets à compléter :
+- **Overview** : commit auteur/date, durée build, régions actives, taille output, lien preview.
+- **Build logs** : streaming SSE déjà branché → afficher badge « ● Live » + auto-scroll toggle + bouton « Copy » + « Download .log ».
+- **Runtime logs** : bascule `type=app` quand `state=READY`.
+- **Sources** : arbre `git` (fichier, taille) via `github-api /repos/:o/:r/contents/`.
+- **Env vars** : lecture seule (Vercel `/v9/projects/:id/env`) avec toggle « Reveal ».
+- **Domains** : liste alias + bouton « Assign » (déjà partiel).
 
-Nouveaux fichiers :
-- `supabase/functions/render-api/index_test.ts`
-- `supabase/functions/vercel-api/index_test.ts`
-- `supabase/functions/render-deploy/index_test.ts`
+### 4. Vues lentes / mal organisées
+- `Backend.tsx` : la liste Postgres/KeyValue/Services fait 3 requêtes séquentielles → passer à `useQueries` parallèle, tri stable, colonnes fixes.
+- `Dashboard.tsx` : agréger les compteurs via `useQuery` unique côté DB (RPC) au lieu de multiples appels.
+- `Analytics.tsx`, `Observability.tsx` : ajouter un `EmptyState` explicite quand l'API renvoie `[]` (au lieu de skeleton infini).
 
-Chaque test couvre Create → Read → Update → Delete avec assertion `status === 200|201|204`. Lancés via `supabase--test_edge_functions`. Mapper proprement les `non-200` vers un toast lisible côté front (helper `humanizeApiError` dans `src/lib/render.ts` et `src/lib/vercel.ts`).
+### 5. Tests et validation
+- Tests Deno pour `render-deploy`, `render-api`, `github-api`, `vercel-deploy` couvrant Create→Read→Delete (`status ∈ {200,201,204}`). Le test `render-deploy` couvre les 7 kinds.
+- Test frontend Vitest pour `useDeploymentLogStream` (mock EventSource, buffer, reconnect).
+- Playwright smoke via shell : login → Dashboard → Deploy → BackendNew wizard 5 étapes → screenshots de chaque étape.
+- Passe manuelle : je relève les logs `supabase--edge_function_logs` de `render-deploy` après un vrai appel pour confirmer la correction.
 
-## 3. Logs temps réel pendant déploiement
+### 6. Briefing final
+Après stabilisation, je livre un tableau honnête `Feature × Statut (OK / Partiel / Non branché) × Preuve (test/log/screenshot)` pour que tu saches précisément ce qui marche.
 
-Objectif : chaque ligne apparaît instantanément, zéro reload.
+## Technical details
 
-- `DeployDetail.tsx` onglet Logs : ouvrir `EventSource('vercel-logs-stream')` dès que `deployment.state ∈ {QUEUED, INITIALIZING, BUILDING}`. Indicateur `● Live` qui pulse. Buffer ring 2000 lignes.
-- `BackendServiceDetail.tsx` onglet Logs : idem avec `render-logs-stream?resource=srv_xxx&type=build` pendant un deploy, bascule auto vers `type=app` quand `state=live`.
-- `Logs.tsx` global : déjà OK, juste ajouter auto-reconnect avec backoff exponentiel (1s → 30s).
-- Nouveau hook `useDeploymentLogStream(deploymentId, { source: 'vercel'|'render', active })` qui encapsule backfill REST + SSE + reconnect.
+- `supabase/functions/render-deploy/index.ts` : ajouter Zod, logs `console.error('render api', r.status, data)`, propager `detail` avec `status: 502` si Render répond >=400.
+- `src/lib/utils.ts` : nouveau `invokeFn(name, body)` utilisé par `render.ts`, `vercel.ts`, `github.ts`.
+- `useQueries` de `@tanstack/react-query` déjà installé.
+- SSE `vercel-logs-stream` déjà `verify_jwt = false` — OK.
+- Aucune migration DB requise sauf éventuel `connected_accounts.expired_at`.
 
-## 4. Observability live (`Observability.tsx`)
+## Non-goals
 
-Remplacer les 4 cartes "—" :
-
-| Carte | Source |
-|---|---|
-| Edge Requests | `vercel.getUsage()` → `edge.requests` (24h) |
-| Fast Data Transfer | `vercel.getUsage()` → `bandwidth.fastDataTransfer` |
-| Function Invocations | `vercel.getUsage()` → `serverless.invocations` |
-| Middleware Invocations | `vercel.getUsage()` → `edge.middlewareInvocations` |
-
-- Sparkline 24h dans chaque carte (recharts `<AreaChart>`).
-- Section "Active Alerts" : `vercel.listLogDrains()` + `vercel.getFirewallAttackStatus()` + Render events `severity ∈ {warning,error}` < 24h.
-- Tous via `useQuery` (`staleTime: 30s`, `refetchInterval: 60s`, `placeholderData: keepPreviousData`).
-- Skeletons `MetricChartSkeleton` au tout premier load uniquement. Jamais d'empty si ≥ 1 projet importé.
-
-## 5. Analytics live (`Analytics.tsx`)
-
-- Migrer `useEffect + setData` → `useQuery(['vercel-analytics', selected, range])` avec `placeholderData: keepPreviousData`.
-- `staleTime: 60s`, persistance localStorage déjà active via `queryClient.ts`.
-- Empty state UNIQUEMENT si pas de projet importé. Erreur API → garde la donnée précédente + toast discret, jamais d'écran "Analytics unavailable" qui efface l'existant.
-- Whitelist `/v1/web/insights/stats` et `/v1/integrations/billing/usage` dans `vercel-api/index.ts` (vérifier, ajouter si manque).
-
-## 6. Builder (`Builder.tsx`) — refonte complète
-
-Installation AI Elements :
-
-```bash
-bun x ai-elements@latest add conversation message prompt-input shimmer tool
-```
-
-Nouvelle structure :
-
-```text
-┌─────────────────────────┬──────────────────────────┐
-│ Conversation (AI Elem.) │ Plan & Files (réel)      │
-│  - Message + Markdown   │  - FileTree parsé du     │
-│  - Tool accordion fermé │    stream (blocs ```path)│
-│  - Shimmer "Thinking…"  │  - Diff viewer simple    │
-│ PromptInput + Submit    │  - Empty: "Awaiting AI"  │
-└─────────────────────────┴──────────────────────────┘
-```
-
-- Supprimer `FakeAppPreview`, `templates` codés en dur (garder comme suggestions chips dans empty state).
-- Logo agent : générer une icône Nebula (imagegen) — pas de `Sparkles`.
-- Streaming token-par-token via `builder-chat` SSE (déjà existant), rendu via `<MessageResponse>`.
-- Parser des blocs ` ```path/to/file ` pour alimenter `FileTree` en temps réel.
-- `<Tool>` collapsed pour chaque appel outil (lint, build, deploy).
-- Bouton "Apply to project" → crée le projet réel (pas `addProject` factice).
-
-## 7. UI Generator (`UIGen.tsx`) — refonte
-
-- Supprimer `FakeAppPreview` pricing en dur.
-- Layout split :
-
-```text
-┌──────────────────┬─────────────────────────────┐
-│ PromptInput      │ 3 variantes (iframes HTML   │
-│ + presets        │   sandboxées) côte à côte   │
-│ + history list   │ Actions: Copy, Export, ↻    │
-└──────────────────┴─────────────────────────────┘
-```
-
-- Appel `builder-chat` avec system prompt "renvoie 3 variantes HTML/Tailwind autonomes dans 3 blocs ```html".
-- Historique persisté `localStorage` (`uigen-history-v1`).
-- AI Elements : `Conversation` + `Message` pour le log de génération.
-- Iframes `sandbox="allow-scripts"`, srcDoc injecté.
-
-## 8. Persistance & sidebar — finitions
-
-- Vérifier que `useDashboardData`, `useGithubRepos` ne refont PAS de spinner quand cache présent (regression check).
-- Sidebar Backend : ajouter items "Static Sites", "Workers", "Cron Jobs" qui filtrent `?type=…` (la liste existe déjà côté data).
-
-## Détails techniques (référence dev)
-
-- Nouveau composant `src/components/dashboard/MetricSparkCard.tsx` (carte + sparkline + delta %).
-- Nouveau hook `src/hooks/useDeploymentLogStream.ts` (SSE + reconnect + ring buffer).
-- Nouveau hook `src/hooks/useVercelUsage.ts` (24h usage, query key `['vercel-usage', range]`).
-- Composants AI Elements installés dans `src/components/ai-elements/`.
-- Tests Deno dans `supabase/functions/{render-api,vercel-api,render-deploy}/index_test.ts`.
-- Helper `humanizeApiError(err): string` dans `src/lib/utils.ts` (mappage 401/403/404/429/5xx).
-
-## Hors périmètre
-
-- Pas de changement de stack, pas de redesign des landings publiques, pas de nouveau provider de paiement.
-- Pas de migration des autres pages déjà conformes (Deploy, Dashboard, DeployDetail) sauf pour brancher `useDeploymentLogStream`.
+- Refonte visuelle globale, nouvelle skill Builder, ou changement d'auth provider.
+- Support Cloudflare / autres registrars au-delà de ce qui existe.
