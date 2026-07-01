@@ -255,7 +255,12 @@ export interface CreateServiceInput {
 export async function createServiceAndDeploy(input: CreateServiceInput) {
   const { data, error } = await supabase.functions.invoke('render-deploy', { body: input });
   if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+  if (data?.error) {
+    const detail = data.detail
+      ? (typeof data.detail === 'string' ? data.detail : (data.detail.message || JSON.stringify(data.detail)))
+      : '';
+    throw new Error(detail ? `${data.error} — ${detail}` : data.error);
+  }
   return data as { service_id: string; service_name: string; deploy_id: string | null; service_url: string | null };
 }
 
