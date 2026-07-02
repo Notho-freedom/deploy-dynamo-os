@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { Globe, Loader2, Search } from 'lucide-react';
 import { DashboardToolbar, EmptyPanel, FilterBar, SectionPanel } from '@/components/dashboard/DashboardPrimitives';
 import { useUserProjects, UserProjectRecord } from '@/hooks/useDashboardData';
@@ -13,45 +14,30 @@ interface DomainRow extends VercelDomain {
 
 export default function Domains() {
   const { projects, loading: projectsLoading, error: projectsError } = useUserProjects();
-  const [domains, setDomains] = useState<DomainRow[]>([]);
-  const [loadingDomains, setLoadingDomains] = useState(false);
-  const [domainError, setDomainError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      if (projects.length === 0) {
-        setDomains([]);
-        setLoadingDomains(false);
-        return;
-      }
-      setLoadingDomains(true);
-      setDomainError(null);
-      const results = await Promise.all(
-        projects.map(async (project: UserProjectRecord) => {
-          try {
-            const result = await vercel.listDomains(project.vercel_project_id);
-            return (result.domains || []).map((domain) => ({
-              ...domain,
-              projectName: project.vercel_project_name,
-              projectId: project.vercel_project_id,
-            }));
-          } catch (error) {
-            setDomainError(error instanceof Error ? error.message : String(error));
-            return [] as DomainRow[];
-          }
-        }),
-      );
-      if (!active) return;
-      setDomains(results.flat());
-      setLoadingDomains(false);
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [projects]);
+  const results = useQueries({
+    queries: projects.map((project: UserProjectRecord) => ({
+      queryKey: ['project-domains', project.vercel_project_id],
+      queryFn: () => vercel.listDomains(project.vercel_project_id),
+      staleTime: 60_000,
+    })),
+  });
+
+  const domains = useMemo<DomainRow[]>(() => {
+    return results.flatMap((r, i) => {
+      const project = projects[i];
+      if (!project || !r.data?.domains) return [];
+      return r.data.domains.map((d) => ({
+        ...d,
+        projectName: project.vercel_project_name,
+        projectId: project.vercel_project_id,
+      }));
+    });
+  }, [results, projects]);
+
+  const domainError = results.find((r) => r.error)?.error;
+  const loadingDomains = results.some((r) => r.isLoading && !r.data);
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -59,7 +45,8 @@ export default function Domains() {
   }, [domains, query]);
 
   const loading = projectsLoading || loadingDomains;
-  const error = projectsError || domainError;
+  const error = projectsError || (domainError instanceof Error ? domainError.message : null);
+
 
   return (
     <div>
