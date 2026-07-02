@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFn } from '@/lib/utils';
 
 export type RenderServiceType =
   | 'web_service'
@@ -97,9 +98,7 @@ interface ApiOpts {
 }
 
 export async function renderApi<T = any>(path: string, opts: ApiOpts = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('render-api', {
-    body: { path, method: opts.method || 'GET', query: opts.query, body: opts.body },
-  });
+  const { data, error } = await invokeFn<any>('render-api', { path, method: opts.method || 'GET', query: opts.query, body: opts.body });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
   if (data?.status >= 400) {
