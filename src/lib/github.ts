@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFn } from '@/lib/utils';
 
 export interface GhRepo {
   id: number;
@@ -23,9 +24,7 @@ export class GithubReauthError extends Error {
 }
 
 export async function ghApi<T = any>(path: string, opts: { method?: string; query?: Record<string, any>; body?: any } = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('github-api', {
-    body: { path, method: opts.method || 'GET', query: opts.query, body: opts.body },
-  });
+  const { data, error } = await invokeFn<any>('github-api', { path, method: opts.method || 'GET', query: opts.query, body: opts.body });
   if (error) throw new Error(error.message);
   if (data?.needsReauth || data?.status === 401) throw new GithubReauthError();
   if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));

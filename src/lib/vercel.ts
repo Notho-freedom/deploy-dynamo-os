@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { invokeFn } from '@/lib/utils';
 
 export interface VercelProject {
   id: string;
@@ -92,9 +93,7 @@ export interface VercelApiOptions {
 }
 
 export async function vercelApi<T = any>(path: string, opts: VercelApiOptions = {}): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('vercel-api', {
-    body: { path, method: opts.method || 'GET', query: opts.query, body: opts.body },
-  });
+  const { data, error } = await invokeFn<any>('vercel-api', { path, method: opts.method || 'GET', query: opts.query, body: opts.body });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   if (data?.status >= 400) {
