@@ -1,9 +1,39 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { formatDistanceToNow as fnsFormatDistanceToNow } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+/**
+ * Resilient wrapper around supabase.functions.invoke():
+ *  - Preemptively refreshes the session if the access token expires within 60s.
+ *  - Retries once on a 401 / "JWT expired" after forcing a refresh.
+ * Callers still read the returned `{ data, error }` to preserve per-endpoint
+ * semantics (e.g. `data.status`, `data.needsReauth`).
+ */
+export async function invokeFn<T = unknown>(
+  name: string,
+  body: unknown,
+): Promise<{ data: T | null; error: { message: string } | null }> {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const s = sessionData.session;
+    if (s?.expires_at) {
+      const now = Math.floor(Date.now() / 1000);
+      if (s.expires_at - now < 60) await supabase.auth.refreshSession();
+    }
+  } catch {
+    /* ignore */
+  }
+  const first = await supabase.functions.invoke(name, { body: body as Record<string, unknown> });
+  const looksExpired = first.error && /401|jwt|expired|unauthor/i.test(first.error.message || "");
+  if (!looksExpired) return first as { data: T | null; error: { message: string } | null };
+  try { await supabase.auth.refreshSession(); } catch { /* swallow */ }
+  const second = await supabase.functions.invoke(name, { body: body as Record<string, unknown> });
+  return second as { data: T | null; error: { message: string } | null };
 }
 
 /** Safely coerce a value (number, ISO string, Date, null, undefined) into a valid Date or null. */
